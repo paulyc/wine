@@ -932,7 +932,7 @@
 @ stub __get_tlsindex
 @ cdecl __getmainargs(ptr ptr ptr long ptr)
 @ extern __initenv MSVCRT___initenv
-@ cdecl __iob_func() __p__iob
+@ cdecl __iob_func()
 @ cdecl __isascii(long) MSVCRT___isascii
 @ cdecl __iscsym(long) MSVCRT___iscsym
 @ cdecl __iscsymf(long) MSVCRT___iscsymf
@@ -975,7 +975,7 @@
 @ cdecl __p__dstbias() MSVCRT___p__dstbias
 @ cdecl __p__environ() MSVCRT___p__environ
 @ cdecl __p__fmode() MSVCRT___p__fmode
-@ cdecl __p__iob()
+@ cdecl __p__iob() __iob_func
 @ stub __p__mbcasemap()
 @ cdecl __p__mbctype()
 @ cdecl __p__pctype() MSVCRT___p__pctype
@@ -1654,7 +1654,7 @@
 @ cdecl _seterrormode(long)
 @ cdecl -arch=i386,x86_64,arm,arm64 -norelay _setjmp(ptr) MSVCRT__setjmp
 @ cdecl -arch=i386 -norelay _setjmp3(ptr long) MSVCRT__setjmp3
-@ cdecl -arch=x86_64,arm -norelay _setjmpex(ptr ptr) MSVCRT__setjmpex
+@ cdecl -arch=x86_64,arm -norelay _setjmpex(ptr ptr) __wine_setjmpex
 @ cdecl _setmaxstdio(long) MSVCRT__setmaxstdio
 @ cdecl _setmbcp(long)
 @ cdecl _setmode(long long) MSVCRT__setmode
@@ -2140,9 +2140,9 @@
 @ cdecl fabs(double) MSVCRT_fabs
 @ cdecl -arch=arm,x86_64,arm64 fabsf(float) MSVCRT_fabsf
 @ cdecl fclose(ptr) MSVCRT_fclose
-@ stub fdim
-@ stub fdimf
-@ stub fdiml
+@ cdecl fdim(double double) MSVCR120_fdim
+@ cdecl fdimf(float float) MSVCR120_fdimf
+@ cdecl fdiml(double double) MSVCR120_fdim
 @ stub feclearexcept
 @ cdecl fegetenv(ptr) MSVCRT_fegetenv
 @ stub fegetexceptflag
@@ -2165,8 +2165,8 @@
 @ cdecl floor(double) MSVCRT_floor
 @ cdecl -arch=arm,x86_64,arm64 floorf(float) MSVCRT_floorf
 @ cdecl fma(double double double) MSVCRT_fma
-@ cdecl -arch=arm,x86_64,arm64 fmaf(float float float) MSVCRT_fmaf
-@ stub fmal
+@ cdecl fmaf(float float float) MSVCRT_fmaf
+@ cdecl fmal(double double double) MSVCRT_fma
 @ cdecl fmax(double double) MSVCR120_fmax
 @ cdecl fmaxf(float float) MSVCR120_fmaxf
 @ cdecl fmaxl(double double) MSVCR120_fmax
@@ -2405,9 +2405,9 @@
 @ cdecl -arch=arm,x86_64,arm64 tanf(float) MSVCRT_tanf
 @ cdecl tanh(double) MSVCRT_tanh
 @ cdecl -arch=arm,x86_64,arm64 tanhf(float) MSVCRT_tanhf
-@ stub tgamma
-@ stub tgammaf
-@ stub tgammal
+@ cdecl tgamma(double) MSVCR120_tgamma
+@ cdecl tgammaf(float) MSVCR120_tgammaf
+@ cdecl tgammal(double) MSVCR120_tgamma
 @ cdecl tmpfile() MSVCRT_tmpfile
 @ cdecl tmpfile_s(ptr) MSVCRT_tmpfile_s
 @ cdecl tmpnam(ptr) MSVCRT_tmpnam

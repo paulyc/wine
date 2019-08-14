@@ -461,6 +461,8 @@ HKLM,System\CurrentControlSet\Control\Class\{4d36e967-e325-11ce-bfc1-08002be1031
 HKLM,System\CurrentControlSet\Control\Class\{4d36e967-e325-11ce-bfc1-08002be10318},"Class",,"DiskDrive"
 HKLM,System\CurrentControlSet\Control\Class\{4d36e978-e325-11ce-bfc1-08002be10318},,,"Ports (COM & LPT)"
 HKLM,System\CurrentControlSet\Control\Class\{4d36e978-e325-11ce-bfc1-08002be10318},"Class",,"Ports"
+HKLM,System\CurrentControlSet\Control\Class\{4d36e97d-e325-11ce-bfc1-08002be10318},,,"System devices"
+HKLM,System\CurrentControlSet\Control\Class\{4d36e97d-e325-11ce-bfc1-08002be10318},"Class",,"System"
 HKLM,System\CurrentControlSet\Control\Class\{6bdd1fc6-810f-11d0-bec7-08002be2092f},,,"Imaging devices"
 HKLM,System\CurrentControlSet\Control\Class\{6bdd1fc6-810f-11d0-bec7-08002be2092f},"Class",,"Image"
 HKLM,System\CurrentControlSet\Control\Class\{745a17a0-74d3-11d0-b6fe-00a0c90f57da},,,"Human Interface Devices"
@@ -2552,6 +2554,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,,aspnet_regiis.exe,-
 11,,ngen.exe,-
 11,,fusion.dll,-
+11,,mscorwks.dll,-
 11,,regsvcs.exe,-
 11,,regasm.exe,-
 11,,servicemodelreg.exe,-
@@ -2601,6 +2604,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,,aspnet_regiis.exe,-
 11,,ngen.exe,-
 11,,fusion.dll,-
+11,,mscorwks.dll,-
 11,,regsvcs.exe,-
 11,,regasm.exe,-
 11,,servicemodelreg.exe,-
@@ -2850,14 +2854,7 @@ HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time,"Dlt",,"E. Sou
 HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time,"MUI_Dlt",,"@tzres.dll,-64097"
 HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time,"MUI_Std",,"@tzres.dll,-64096"
 HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time,"Std",,"E. South America Standard Time"
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time,"TZI",1,b4,00,00,00,00,00,00,00,c4,ff,ff,ff,00,00,02,00,00,00,03,00,00,00,00,00,00,00,00,00,00,00,0b,00,00,00,01,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time\Dynamic DST,"2015",1,b4,00,00,00,00,00,00,00,c4,ff,ff,ff,df,07,02,00,00,00,16,00,00,00,00,00,00,00,00,00,df,07,0a,00,00,00,12,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time\Dynamic DST,"2023",1,b4,00,00,00,00,00,00,00,c4,ff,ff,ff,e7,07,02,00,00,00,1a,00,00,00,00,00,00,00,00,00,e7,07,0a,00,00,00,0f,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time\Dynamic DST,"2026",1,b4,00,00,00,00,00,00,00,c4,ff,ff,ff,ea,07,02,00,00,00,16,00,00,00,00,00,00,00,00,00,ea,07,0a,00,00,00,12,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time\Dynamic DST,"2034",1,b4,00,00,00,00,00,00,00,c4,ff,ff,ff,f2,07,02,00,00,00,1a,00,00,00,00,00,00,00,00,00,f2,07,0a,00,00,00,0f,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time\Dynamic DST,"2037",1,b4,00,00,00,00,00,00,00,c4,ff,ff,ff,f5,07,02,00,00,00,16,00,00,00,00,00,00,00,00,00,f5,07,0a,00,00,00,12,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time\Dynamic DST,"FirstEntry",0x10001,2015
-HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time\Dynamic DST,"LastEntry",0x10001,2037
+HKLM,%CurrentVersionNT%\Time Zones\E. South America Standard Time,"TZI",1,b4,00,00,00,00,00,00,00,c4,ff,ff,ff,00,00,02,00,00,00,03,00,00,00,00,00,00,00,00,00,00,00,0c,00,02,00,05,00,17,00,00,00,00,00,00,00
 HKLM,%CurrentVersionNT%\Time Zones\Easter Island Standard Time,"Display",,"Pacific/Easter""
 HKLM,%CurrentVersionNT%\Time Zones\Easter Island Standard Time,"Dlt",,"Easter Island Daylight Time"
 HKLM,%CurrentVersionNT%\Time Zones\Easter Island Standard Time,"MUI_Dlt",,"@tzres.dll,-58593"

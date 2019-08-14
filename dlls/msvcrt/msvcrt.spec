@@ -214,7 +214,7 @@
 @ stub __get_app_type
 @ cdecl __getmainargs(ptr ptr ptr long ptr)
 @ extern __initenv MSVCRT___initenv
-@ cdecl __iob_func() __p__iob
+@ cdecl __iob_func()
 @ cdecl __isascii(long) MSVCRT___isascii
 @ cdecl __iscsym(long) MSVCRT___iscsym
 @ cdecl __iscsymf(long) MSVCRT___iscsymf
@@ -259,7 +259,7 @@
 @ cdecl -arch=win32 __p__environ() MSVCRT___p__environ
 @ stub -arch=win32 __p__fileinfo()
 @ cdecl -arch=win32 __p__fmode() MSVCRT___p__fmode
-@ cdecl __p__iob()
+@ cdecl -arch=i386 __p__iob() __iob_func
 @ stub -arch=win32 __p__mbcasemap()
 @ cdecl -arch=win32 __p__mbctype()
 @ cdecl -arch=win32 __p__osver()
@@ -902,7 +902,7 @@
 @ cdecl _seterrormode(long)
 @ cdecl -arch=i386,x86_64,arm,arm64 -norelay _setjmp(ptr) MSVCRT__setjmp
 @ cdecl -arch=i386 -norelay _setjmp3(ptr long) MSVCRT__setjmp3
-@ cdecl -arch=x86_64,arm,arm64 -norelay _setjmpex(ptr ptr) MSVCRT__setjmpex
+@ cdecl -arch=x86_64,arm,arm64 -norelay _setjmpex(ptr ptr) __wine_setjmpex
 @ cdecl _setmaxstdio(long) MSVCRT__setmaxstdio
 @ cdecl _setmbcp(long)
 @ cdecl _setmode(long long) MSVCRT__setmode
@@ -1062,7 +1062,7 @@
 @ cdecl _vscwprintf(wstr ptr) MSVCRT__vscwprintf
 @ cdecl _vscwprintf_l(wstr ptr ptr) MSVCRT__vscwprintf_l
 @ cdecl _vscwprintf_p_l(wstr ptr ptr) MSVCRT__vscwprintf_p_l
-@ cdecl _vsnprintf(ptr long str ptr) MSVCRT_vsnprintf
+@ cdecl -norelay _vsnprintf(ptr long str ptr) MSVCRT_vsnprintf
 @ cdecl _vsnprintf_c(ptr long str ptr) MSVCRT_vsnprintf
 @ cdecl _vsnprintf_c_l(ptr long str ptr ptr) MSVCRT_vsnprintf_l
 @ cdecl _vsnprintf_l(ptr long str ptr ptr) MSVCRT_vsnprintf_l

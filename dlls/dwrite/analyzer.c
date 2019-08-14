@@ -187,6 +187,13 @@ static const struct dwritescript_properties dwritescripts_properties[Script_Last
     { /* Nshu */ { 0x7568734e, 499,  1, 0x0020, 0, 0, 1, 1, 0, 0, 0 }, { _OT('n','s','h','u') } },
     { /* Soyo */ { 0x6f796f53, 329,  8, 0x0020, 0, 1, 1, 0, 0, 0, 0 }, { _OT('s','o','y','o') } },
     { /* Zanb */ { 0x626e615a, 339,  8, 0x0020, 0, 1, 1, 0, 0, 0, 0 }, { _OT('z','a','n','b') } },
+    { /* Dogr */ { 0x72676f44, 328,  8, 0x0020, 1, 1, 1, 0, 0, 0, 0 }, { _OT('d','o','g','r') } },
+    { /* Gong */ { 0x676e6f47, 312,  8, 0x0020, 1, 1, 0, 0, 0, 1, 0 }, { _OT('g','o','n','g') } },
+    { /* Rohg */ { 0x67686f52, 167,  8, 0x0020, 0, 1, 0, 0, 0, 1, 1 }, { _OT('r','o','h','g') } },
+    { /* Maka */ { 0x616b614d, 366,  8, 0x0020, 0, 1, 1, 0, 0, 0, 0 }, { _OT('m','a','k','a') } },
+    { /* Medf */ { 0x6664654d, 265,  8, 0x0020, 0, 1, 1, 0, 0, 0, 0 }, { _OT('m','e','d','f') } },
+    { /* Sogo */ { 0x6f676f53, 142,  8, 0x0020, 1, 1, 1, 0, 0, 0, 0 }, { _OT('s','o','g','o') } },
+    { /* Sogd */ { 0x64676f53, 141,  8, 0x0020, 1, 1, 0, 0, 0, 1, 1 }, { _OT('s','o','g','d') } },
 };
 #undef _OT
 
@@ -1392,14 +1399,6 @@ static HRESULT WINAPI dwritetextanalyzer_GetGdiCompatibleGlyphPlacements(IDWrite
     }
 
     return hr;
-}
-
-static inline FLOAT get_cluster_advance(const FLOAT *advances, UINT32 start, UINT32 end)
-{
-    FLOAT advance = 0.0f;
-    for (; start < end; start++)
-        advance += advances[start];
-    return advance;
 }
 
 static HRESULT apply_cluster_spacing(float leading_spacing, float trailing_spacing, float min_advance_width,

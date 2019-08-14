@@ -115,6 +115,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(file);
 
 /* just in case... */
 #undef VFAT_IOCTL_READDIR_BOTH
+#undef EXT2_IOC_GETFLAGS
+#undef EXT4_CASEFOLD_FL
 
 #ifdef linux
 
@@ -130,8 +132,18 @@ typedef struct
 /* Define the VFAT ioctl to get both short and long file names */
 #define VFAT_IOCTL_READDIR_BOTH  _IOR('r', 1, KERNEL_DIRENT [2] )
 
+/* Define the ext2 ioctl for handling extra attributes */
+#define EXT2_IOC_GETFLAGS _IOR('f', 1, long)
+
+/* Case-insensitivity attribute */
+#define EXT4_CASEFOLD_FL 0x40000000
+
 #ifndef O_DIRECTORY
 # define O_DIRECTORY 0200000 /* must be directory */
+#endif
+
+#ifndef AT_NO_AUTOMOUNT
+#define AT_NO_AUTOMOUNT 0x800
 #endif
 
 #endif  /* linux */
@@ -1113,7 +1125,7 @@ static int get_dir_case_sensitivity_attr( const char *dir )
  *           get_dir_case_sensitivity_stat
  *
  * Checks if the volume containing the specified directory is case
- * sensitive or not. Uses statfs(2) or statvfs(2).
+ * sensitive or not. Uses (f)statfs(2), statvfs(2), fstatat(2), or ioctl(2).
  */
 static BOOLEAN get_dir_case_sensitivity_stat( const char *dir )
 {
@@ -1165,32 +1177,27 @@ static BOOLEAN get_dir_case_sensitivity_stat( const char *dir )
     return FALSE;
 
 #elif defined(__linux__)
+    BOOLEAN sens = TRUE;
     struct statfs stfs;
     struct stat st;
-    char *cifile;
+    int fd, flags;
 
-    /* Only assume CIOPFS is case insensitive. */
-    if (statfs( dir, &stfs ) == -1) return FALSE;
-    if (stfs.f_type != 0x65735546 /* FUSE_SUPER_MAGIC */)
+    if ((fd = open( dir, O_RDONLY | O_NONBLOCK | O_LARGEFILE )) == -1)
         return TRUE;
-    /* Normally, we'd have to parse the mtab to find out exactly what
-     * kind of FUSE FS this is. But, someone on wine-devel suggested
-     * a shortcut. We'll stat a special file in the directory. If it's
-     * there, we'll assume it's a CIOPFS, else not.
-     * This will break if somebody puts a file named ".ciopfs" in a non-
-     * CIOPFS directory.
-     */
-    cifile = RtlAllocateHeap( GetProcessHeap(), 0, strlen( dir )+sizeof("/.ciopfs") );
-    if (!cifile) return TRUE;
-    strcpy( cifile, dir );
-    strcat( cifile, "/.ciopfs" );
-    if (stat( cifile, &st ) == 0)
+
+    if (ioctl( fd, EXT2_IOC_GETFLAGS, &flags ) != -1 && (flags & EXT4_CASEFOLD_FL))
     {
-        RtlFreeHeap( GetProcessHeap(), 0, cifile );
-        return FALSE;
+        sens = FALSE;
     }
-    RtlFreeHeap( GetProcessHeap(), 0, cifile );
-    return TRUE;
+    else if (fstatfs( fd, &stfs ) == 0 &&                          /* CIOPFS is case insensitive.  Instead of */
+             stfs.f_type == 0x65735546 /* FUSE_SUPER_MAGIC */ &&   /* parsing mtab to discover if the FUSE FS */
+             fstatat( fd, ".ciopfs", &st, AT_NO_AUTOMOUNT ) == 0)  /* is CIOPFS, look for .ciopfs in the dir. */
+    {
+        sens = FALSE;
+    }
+
+    close( fd );
+    return sens;
 #else
     return TRUE;
 #endif
@@ -1201,7 +1208,7 @@ static BOOLEAN get_dir_case_sensitivity_stat( const char *dir )
  *           get_dir_case_sensitivity
  *
  * Checks if the volume containing the specified directory is case
- * sensitive or not. Uses statfs(2) or statvfs(2).
+ * sensitive or not. Uses multiple methods, depending on platform.
  */
 static BOOLEAN get_dir_case_sensitivity( const char *dir )
 {
@@ -2188,80 +2195,27 @@ static const WCHAR driversetcW[] = {'s','y','s','t','e','m','3','2','\\','d','r'
 static const WCHAR logfilesW[] = {'s','y','s','t','e','m','3','2','\\','l','o','g','f','i','l','e','s',0};
 static const WCHAR spoolW[] = {'s','y','s','t','e','m','3','2','\\','s','p','o','o','l',0};
 static const WCHAR system32W[] = {'s','y','s','t','e','m','3','2',0};
-static const WCHAR syswow64W[] = {'s','y','s','w','o','w','6','4',0};
 static const WCHAR sysnativeW[] = {'s','y','s','n','a','t','i','v','e',0};
 static const WCHAR regeditW[] = {'r','e','g','e','d','i','t','.','e','x','e',0};
-static const WCHAR wow_regeditW[] = {'s','y','s','w','o','w','6','4','\\','r','e','g','e','d','i','t','.','e','x','e',0};
 
 static struct
 {
     const WCHAR *source;
-    const WCHAR *dos_target;
     const char *unix_target;
 } redirects[] =
 {
-    { catrootW, NULL, NULL },
-    { catroot2W, NULL, NULL },
-    { driversstoreW, NULL, NULL },
-    { driversetcW, NULL, NULL },
-    { logfilesW, NULL, NULL },
-    { spoolW, NULL, NULL },
-    { system32W, syswow64W, NULL },
-    { sysnativeW, system32W, NULL },
-    { regeditW, wow_regeditW, NULL }
+    { catrootW, NULL },
+    { catroot2W, NULL },
+    { driversstoreW, NULL },
+    { driversetcW, NULL },
+    { logfilesW, NULL },
+    { spoolW, NULL },
+    { system32W, "syswow64" },
+    { sysnativeW, "system32" },
+    { regeditW, "syswow64/regedit.exe" }
 };
 
 static unsigned int nb_redirects;
-
-
-/***********************************************************************
- *           get_redirect_target
- *
- * Find the target unix name for a redirected dir.
- */
-static const char *get_redirect_target( const char *windows_dir, const WCHAR *name )
-{
-    int used_default, len, pos, win_len = strlen( windows_dir );
-    char *unix_name, *unix_target = NULL;
-    NTSTATUS status;
-
-    if (!(unix_name = RtlAllocateHeap( GetProcessHeap(), 0, win_len + MAX_DIR_ENTRY_LEN + 2 )))
-        return NULL;
-    memcpy( unix_name, windows_dir, win_len );
-    pos = win_len;
-
-    while (*name)
-    {
-        const WCHAR *end, *next;
-
-        for (end = name; *end; end++) if (IS_SEPARATOR(*end)) break;
-        for (next = end; *next; next++) if (!IS_SEPARATOR(*next)) break;
-
-        status = find_file_in_dir( unix_name, pos, name, end - name, FALSE, NULL );
-        if (status == STATUS_OBJECT_PATH_NOT_FOUND && !*next)  /* not finding last element is ok */
-        {
-            len = ntdll_wcstoumbs( 0, name, end - name, unix_name + pos + 1,
-                                   MAX_DIR_ENTRY_LEN - (pos - win_len), NULL, &used_default );
-            if (len > 0 && !used_default)
-            {
-                unix_name[pos] = '/';
-                pos += len + 1;
-                unix_name[pos] = 0;
-                break;
-            }
-        }
-        if (status) goto done;
-        pos += strlen( unix_name + pos );
-        name = next;
-    }
-
-    if ((unix_target = RtlAllocateHeap( GetProcessHeap(), 0, pos - win_len )))
-        memcpy( unix_target, unix_name + win_len + 1, pos - win_len );
-
-done:
-    RtlFreeHeap( GetProcessHeap(), 0, unix_name );
-    return unix_target;
-}
 
 
 /***********************************************************************
@@ -2273,7 +2227,6 @@ static void init_redirects(void)
     const char *config_dir = wine_get_config_dir();
     char *dir;
     struct stat st;
-    unsigned int i;
 
     if (!(dir = RtlAllocateHeap( GetProcessHeap(), 0, strlen(config_dir) + sizeof(windows_dir) ))) return;
     strcpy( dir, config_dir );
@@ -2283,12 +2236,6 @@ static void init_redirects(void)
         windir.dev = st.st_dev;
         windir.ino = st.st_ino;
         nb_redirects = ARRAY_SIZE( redirects );
-        for (i = 0; i < nb_redirects; i++)
-        {
-            if (!redirects[i].dos_target) continue;
-            redirects[i].unix_target = get_redirect_target( dir, redirects[i].dos_target );
-            TRACE( "%s -> %s\n", debugstr_w(redirects[i].source), redirects[i].unix_target );
-        }
     }
     else ERR( "%s: %s\n", dir, strerror(errno) );
     RtlFreeHeap( GetProcessHeap(), 0, dir );

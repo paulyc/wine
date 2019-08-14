@@ -2135,7 +2135,7 @@ static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, WINE_MODREF **pwm,
             *module = NULL;
         }
         status = virtual_map_section( mapping, module, 0, 0, NULL, &len,
-                                      PAGE_EXECUTE_READ, image_info );
+                                      0, PAGE_EXECUTE_READ, image_info );
         if (status == STATUS_IMAGE_NOT_AT_BASE) status = STATUS_SUCCESS;
         NtClose( mapping );
     }
@@ -2304,6 +2304,7 @@ static NTSTATUS open_builtin_file( char *name, WINE_MODREF **pwm, void **module,
     {
         WARN( "%s found in WINEDLLPATH but not a builtin, ignoring\n", debugstr_a(name) );
         NtUnmapViewOfSection( NtCurrentProcess(), *module );
+        *module = NULL;
         status = STATUS_DLL_NOT_FOUND;
     }
 
@@ -2318,6 +2319,8 @@ static NTSTATUS open_builtin_file( char *name, WINE_MODREF **pwm, void **module,
         {
             if ((*so_name = RtlAllocateHeap( GetProcessHeap(), 0, strlen(name) + 1 )))
                 strcpy( *so_name, name );
+            NtUnmapViewOfSection( NtCurrentProcess(), *module );
+            *module = NULL;
             status = STATUS_SUCCESS;
         }
         else status = STATUS_IMAGE_MACHINE_TYPE_MISMATCH;
@@ -2424,7 +2427,7 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
     }
 
     info.load_path = load_path;
-    info.filename  = so_name ? NULL : nt_name;
+    info.filename  = nt_name;
     info.status    = STATUS_SUCCESS;
     info.wm        = NULL;
 
@@ -2505,7 +2508,7 @@ static NTSTATUS load_builtin_dll( LPCWSTR load_path, const UNICODE_STRING *nt_na
     if (status == STATUS_DLL_NOT_FOUND && *module_ptr)
     {
         /* builtin not found, load the module we got previously */
-        TRACE( "loading %s from PE builtin %s\n", debugstr_w(name), debugstr_us(nt_name) );
+        TRACE( "loading %s from PE file %s\n", debugstr_w(name), debugstr_us(nt_name) );
         return load_native_dll( load_path, nt_name, module_ptr, &image_info, flags, pwm, &st );
     }
     if (status) return status;
@@ -2525,7 +2528,9 @@ static NTSTATUS load_builtin_dll( LPCWSTR load_path, const UNICODE_STRING *nt_na
         return load_native_dll( load_path, nt_name, module_ptr, &image_info, flags, pwm, &st );
     }
 
-    return load_so_dll( load_path, nt_name, so_name, pwm );
+    status = load_so_dll( load_path, nt_name, so_name, pwm );
+    RtlFreeHeap( GetProcessHeap(), 0, so_name );
+    return status;
 }
 
 
@@ -2688,7 +2693,7 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname,
                                void **module, pe_image_info_t *image_info, struct stat *st )
 {
     WCHAR *ext, *dllname;
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status;
 
     /* first append .dll if needed */
 
@@ -2711,8 +2716,6 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname,
     {
         WCHAR *fullname = NULL;
 
-        if ((*pwm = find_basename_module( libname )) != NULL) goto done;
-
         status = find_actctx_dll( libname, &fullname );
         if (status == STATUS_SUCCESS)
         {
@@ -2720,7 +2723,15 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname,
             RtlFreeHeap( GetProcessHeap(), 0, dllname );
             libname = dllname = fullname;
         }
-        else if (status != STATUS_SXS_KEY_NOT_FOUND) goto done;
+        else
+        {
+            if (status != STATUS_SXS_KEY_NOT_FOUND) goto done;
+            if ((*pwm = find_basename_module( libname )) != NULL)
+            {
+                status = STATUS_SUCCESS;
+                goto done;
+            }
+        }
     }
 
     if (RtlDetermineDosPathNameType_U( libname ) == RELATIVE_PATH)
@@ -3216,7 +3227,7 @@ void* WINAPI LdrResolveDelayLoadedAPI( void* base, const IMAGE_DELAYLOAD_DESCRIP
     FARPROC fp;
     DWORD id;
 
-    FIXME("(%p, %p, %p, %p, %p, 0x%08x), partial stub\n", base, desc, dllhook, syshook, addr, flags);
+    TRACE( "(%p, %p, %p, %p, %p, 0x%08x)\n", base, desc, dllhook, syshook, addr, flags );
 
     phmod = get_rva(base, desc->ModuleHandleRVA);
     pIAT = get_rva(base, desc->ImportAddressTableRVA);
@@ -3787,6 +3798,7 @@ void __wine_process_init(void)
     ANSI_STRING func_name;
     UNICODE_STRING nt_name;
     void * (CDECL *init_func)(void);
+    INITIAL_TEB stack;
 
     thread_init();
 
@@ -3838,11 +3850,15 @@ void __wine_process_init(void)
     RemoveEntryList( &wm->ldr.InMemoryOrderModuleList );
     InsertHeadList( &NtCurrentTeb()->Peb->LdrData->InMemoryOrderModuleList, &wm->ldr.InMemoryOrderModuleList );
 
-    if ((status = virtual_alloc_thread_stack( NtCurrentTeb(), 0, 0, NULL )) != STATUS_SUCCESS)
+    if ((status = virtual_alloc_thread_stack( &stack, 0, 0, NULL )) != STATUS_SUCCESS)
     {
         ERR( "Main exe initialization for %s failed, status %x\n",
              debugstr_w(wm->ldr.FullDllName.Buffer), status );
         NtTerminateProcess( GetCurrentProcess(), status );
     }
+    NtCurrentTeb()->Tib.StackBase = stack.StackBase;
+    NtCurrentTeb()->Tib.StackLimit = stack.StackLimit;
+    NtCurrentTeb()->DeallocationStack = stack.DeallocationStack;
+
     server_init_process_done();
 }

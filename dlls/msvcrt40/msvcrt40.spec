@@ -899,7 +899,7 @@
 @ cdecl -arch=win32 __p__dstbias() msvcrt.__p__dstbias
 @ cdecl -arch=win32 __p__environ() msvcrt.__p__environ
 @ cdecl -arch=win32 __p__fmode() msvcrt.__p__fmode
-@ cdecl __p__iob() msvcrt.__p__iob
+@ cdecl -arch=i386 __p__iob() msvcrt.__p__iob
 @ cdecl -arch=win32 __p__mbctype() msvcrt.__p__mbctype
 @ cdecl -arch=win32 __p__osver() msvcrt.__p__osver
 @ cdecl -arch=win32 __p__pctype() msvcrt.__p__pctype
@@ -1253,7 +1253,7 @@
 @ cdecl _unlink(str) msvcrt._unlink
 @ cdecl _unloaddll(long) msvcrt._unloaddll
 @ cdecl _utime(str ptr) msvcrt._utime
-@ cdecl _vsnprintf(ptr long str ptr) msvcrt._vsnprintf
+@ cdecl -norelay _vsnprintf(ptr long str ptr) msvcrt._vsnprintf
 @ cdecl _vsnwprintf(ptr long wstr ptr) msvcrt._vsnwprintf
 @ cdecl _waccess(wstr long) msvcrt._waccess
 @ cdecl _wasctime(ptr) msvcrt._wasctime

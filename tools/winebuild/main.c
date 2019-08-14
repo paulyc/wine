@@ -46,6 +46,7 @@ int verbose = 0;
 int link_ext_symbols = 0;
 int force_pointer_size = 0;
 int unwind_tables = 0;
+int unix_lib = 0;
 
 #ifdef __i386__
 enum target_cpu target_cpu = CPU_x86;
@@ -224,7 +225,7 @@ static void set_target( const char *target )
     /* get the OS part */
 
     target_platform = PLATFORM_UNSPECIFIED;  /* default value */
-    for (i = 0; i < sizeof(platform_names)/sizeof(platform_names[0]); i++)
+    for (i = 0; i < ARRAY_SIZE(platform_names); i++)
     {
         if (!strncmp( platform_names[i].name, platform, strlen(platform_names[i].name) ))
         {
@@ -368,6 +369,15 @@ static void set_exec_mode( enum exec_mode_values mode )
     exec_mode = mode;
 }
 
+/* get the default entry point for a given spec file */
+static const char *get_default_entry_point( const DLLSPEC *spec )
+{
+    if (spec->characteristics & IMAGE_FILE_DLL) return "__wine_spec_dll_entry";
+    if (spec->subsystem == IMAGE_SUBSYSTEM_NATIVE) return "__wine_spec_drv_entry";
+    if (spec->type == SPEC_WIN16) return "__wine_spec_exe16_entry";
+    return "__wine_spec_exe_entry";
+}
+
 /* parse options from the argv array and remove all the recognized ones */
 static char **parse_options( int argc, char **argv, DLLSPEC *spec )
 {
@@ -411,6 +421,7 @@ static char **parse_options( int argc, char **argv, DLLSPEC *spec )
             else if (!strcmp( optarg, "64" )) force_pointer_size = 8;
             else if (!strcmp( optarg, "arm" )) thumb_mode = 0;
             else if (!strcmp( optarg, "thumb" )) thumb_mode = 1;
+            else if (!strcmp( optarg, "unix" )) unix_lib = 1;
             else if (!strncmp( optarg, "cpu=", 4 )) cpu_option = xstrdup( optarg + 4 );
             else if (!strncmp( optarg, "fpu=", 4 )) fpu_option = xstrdup( optarg + 4 );
             else if (!strncmp( optarg, "arch=", 5 )) arch_option = xstrdup( optarg + 5 );
@@ -631,6 +642,7 @@ int main(int argc, char **argv)
     case MODE_EXE:
         load_resources( argv, spec );
         if (spec_file_name && !parse_input_file( spec )) break;
+        if (!spec->init_func) spec->init_func = xstrdup( get_default_entry_point( spec ));
 
         if (fake_module)
         {

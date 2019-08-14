@@ -17,8 +17,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -44,7 +42,6 @@
 #include "xinput.h"
 #include "xinput_private.h"
 
-#include "wine/unicode.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(xinput);
 
@@ -176,7 +173,11 @@ static BOOL VerifyGamepad(PHIDP_PREPARSED_DATA ppd, XINPUT_CAPABILITIES *xinput_
 
     value_caps_count = caps->NumberOutputValueCaps;
     if (value_caps_count > 0)
+    {
         xinput_caps->Flags |= XINPUT_CAPS_FFB_SUPPORTED;
+        xinput_caps->Vibration.wLeftMotorSpeed = 255;
+        xinput_caps->Vibration.wRightMotorSpeed = 255;
+    }
 
     return TRUE;
 }
@@ -190,7 +191,7 @@ static void build_private(struct hid_platform_private *private, PHIDP_PREPARSED_
     private->current_report = 0;
     private->reports[0] = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, private->report_length);
     private->reports[1] = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, private->report_length);
-    size = (strlenW(path) + 1) * sizeof(WCHAR);
+    size = (lstrlenW(path) + 1) * sizeof(WCHAR);
     private->device_path = HeapAlloc(GetProcessHeap(), 0, size);
     memcpy(private->device_path, path, size);
     private->enabled = TRUE;
@@ -238,13 +239,13 @@ void HID_find_gamepads(xinput_controller *devices)
                 &interface_data, data, sizeof(*data) + detail_size, NULL, NULL))
             continue;
 
-        if (!strstrW(data->DevicePath, ig))
+        if (!wcsstr(data->DevicePath, ig))
             continue;
 
         for (i = 0; i < XUSER_MAX_COUNT; i++)
         {
             struct hid_platform_private *private = devices[i].platform_private;
-            if (devices[i].connected && !strcmpW(data->DevicePath, private->device_path))
+            if (devices[i].connected && !wcscmp(data->DevicePath, private->device_path))
                 break;
         }
         if (i != XUSER_MAX_COUNT)
@@ -459,8 +460,8 @@ DWORD HID_set_state(xinput_controller* device, XINPUT_VIBRATION* state)
 
     if (device->caps.Flags & XINPUT_CAPS_FFB_SUPPORTED)
     {
-        device->caps.Vibration.wLeftMotorSpeed = state->wLeftMotorSpeed;
-        device->caps.Vibration.wRightMotorSpeed = state->wRightMotorSpeed;
+        device->vibration.wLeftMotorSpeed = state->wLeftMotorSpeed;
+        device->vibration.wRightMotorSpeed = state->wRightMotorSpeed;
 
         if (private->enabled)
         {
@@ -501,7 +502,7 @@ void HID_enable(xinput_controller* device, BOOL enable)
         }
         else if (!private->enabled && enable)
         {
-            HID_set_state(device, &device->caps.Vibration);
+            HID_set_state(device, &device->vibration);
         }
         LeaveCriticalSection(&private->crit);
     }

@@ -107,7 +107,7 @@ static inline var_t *type_function_get_retval(const type_t *type)
 
 static inline type_t *type_function_get_rettype(const type_t *type)
 {
-    return type_function_get_retval(type)->type;
+    return type_function_get_retval(type)->declspec.type;
 }
 
 static inline var_list_t *type_enum_get_values(const type_t *type)
@@ -142,7 +142,7 @@ static inline var_list_t *type_union_get_cases(const type_t *type)
     if (type_type == TYPE_ENCAPSULATED_UNION)
     {
         const var_t *uv = LIST_ENTRY(list_tail(type->details.structure->fields), const var_t, entry);
-        return uv->type->details.structure->fields;
+        return uv->declspec.type->details.structure->fields;
     }
     else
         return type->details.structure->fields;
@@ -250,11 +250,16 @@ static inline expr_t *type_array_get_variance(const type_t *type)
     return type->details.array.length_is;
 }
 
-static inline type_t *type_array_get_element(const type_t *type)
+static inline const decl_spec_t *type_array_get_element(const type_t *type)
 {
     type = type_get_real_type(type);
     assert(type_get_type(type) == TYPE_ARRAY);
-    return type->details.array.elem;
+    return &type->details.array.elem;
+}
+
+static inline type_t *type_array_get_element_type(const type_t *type)
+{
+    return type_array_get_element(type)->type;
 }
 
 static inline int type_array_is_decl_as_ptr(const type_t *type)
@@ -289,11 +294,16 @@ static inline ifref_list_t *type_coclass_get_ifaces(const type_t *type)
     return type->details.coclass.ifaces;
 }
 
-static inline type_t *type_pointer_get_ref(const type_t *type)
+static inline const decl_spec_t *type_pointer_get_ref(const type_t *type)
 {
     type = type_get_real_type(type);
     assert(type_get_type(type) == TYPE_POINTER);
-    return type->details.pointer.ref;
+    return &type->details.pointer.ref;
+}
+
+static inline type_t *type_pointer_get_ref_type(const type_t *type)
+{
+    return type_pointer_get_ref(type)->type;
 }
 
 static inline unsigned char type_pointer_get_default_fc(const type_t *type)

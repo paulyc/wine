@@ -50,6 +50,7 @@ static HRESULT d3drm_update_background_material(struct d3drm_viewport *viewport)
     if (FAILED(hr = IDirect3DRMFrame_GetScene(viewport->camera, &root_frame)))
         return hr;
     color = IDirect3DRMFrame_GetSceneBackground(root_frame);
+    IDirect3DRMFrame_Release(root_frame);
 
     memset(&mat, 0, sizeof(mat));
     mat.dwSize = sizeof(mat);
@@ -522,6 +523,9 @@ static HRESULT WINAPI d3drm_viewport2_SetField(IDirect3DRMViewport2 *iface, D3DV
 
     TRACE("iface %p, field %.8e.\n", iface, field);
 
+    if (field <= 0.0f)
+        return D3DRMERR_BADVALUE;
+
     viewport->field = field;
 
     return D3DRM_OK;
@@ -682,6 +686,9 @@ static HRESULT WINAPI d3drm_viewport2_GetDevice(IDirect3DRMViewport2 *iface, IDi
 
     TRACE("iface %p, device %p.\n", iface, device);
 
+    if (!device)
+        return D3DRMERR_BADVALUE;
+
     if (!viewport->device)
         return D3DRMERR_BADOBJECT;
 
@@ -696,6 +703,9 @@ static HRESULT WINAPI d3drm_viewport1_GetDevice(IDirect3DRMViewport *iface, IDir
     struct d3drm_viewport *viewport = impl_from_IDirect3DRMViewport(iface);
 
     TRACE("iface %p, device %p.\n\n", iface, device);
+
+    if (!device)
+        return D3DRMERR_BADVALUE;
 
     if (!viewport->device)
         return D3DRMERR_BADOBJECT;
@@ -888,6 +898,9 @@ static HRESULT WINAPI d3drm_viewport2_GetDirect3DViewport(IDirect3DRMViewport2 *
     struct d3drm_viewport *viewport_object = impl_from_IDirect3DRMViewport2(iface);
 
     TRACE("iface %p, viewport %p.\n", iface, viewport);
+
+    if (!viewport)
+        return D3DRMERR_BADVALUE;
 
     if (!viewport_object->d3d_viewport)
         return D3DRMERR_BADOBJECT;

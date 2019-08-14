@@ -1564,7 +1564,7 @@ fi
 
 dnl **** Check for pthread functions ****
 WINE_CHECK_LIB_FUNCS(\
-        pthread_getthreadid_np \
+        pthread_getthreadid_np,
         [$PTHREAD_LIBS])
 
 dnl **** Check for zlib ****
@@ -1691,11 +1691,10 @@ if test "x$with_faudio" != "xno"
 then
     WINE_PACKAGE_FLAGS(FAUDIO,[faudio],[-lFAudio],,,
         [AC_CHECK_HEADERS([FAudio.h],
-            [WINE_CHECK_SONAME(FAudio,FAudioCreate,,,[$FAUDIO_LIBS],[[libFAudio*]])])])
-    WINE_CHECK_LIB_FUNCS(\
-        FAudio_CommitOperationSet \
-        F3DAudioInitialize8,
-        [$FAUDIO_LIBS])
+            [WINE_CHECK_SONAME(FAudio,FAudioCreate,,,[$FAUDIO_LIBS],[[libFAudio*]])])
+             WINE_CHECK_LIB_FUNCS([FAudio_CommitOperationSet \
+                                   F3DAudioInitialize8], [$FAUDIO_LIBS])
+            ])
 fi
 WINE_NOTICE_WITH(faudio,[test "x$ac_cv_lib_soname_FAudio" = "x"],
                  [libFAudio ${notice_platform}development files not found, XAudio2 won't be supported.])
@@ -1975,6 +1974,7 @@ then
   dnl clang needs to be told to fail on unknown options
   saved_CFLAGS=$CFLAGS
   WINE_TRY_CFLAGS([-Werror=unknown-warning-option],[CFLAGS="$CFLAGS -Werror=unknown-warning-option"])
+  WINE_TRY_CFLAGS([-Werror=unused-command-line-argument],[CFLAGS="$CFLAGS -Werror=unused-command-line-argument"])
   WINE_TRY_CFLAGS([-Wdeclaration-after-statement])
   WINE_TRY_CFLAGS([-Wempty-body])
   WINE_TRY_CFLAGS([-Wignored-qualifiers])
@@ -2006,8 +2006,6 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
       CFLAGS=$saved_string_h_CFLAGS
       test "$ac_cv_c_logicalop_noisy" = yes || EXTRACFLAGS="$EXTRACFLAGS -Wlogical-op"])
 
-  CFLAGS=$saved_CFLAGS
-
   dnl Default to dwarf-2 debug info
   for ac_flag in $CFLAGS; do
     case $ac_flag in
@@ -2035,6 +2033,8 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
         *) WINE_TRY_CFLAGS([-mabi=ms],[MSVCRTFLAGS="$MSVCRTFLAGS -mabi=ms"]) ;;
       esac ;;
   esac
+
+  CFLAGS=$saved_CFLAGS
 
   dnl Enable -Werror for maintainer mode
   if test "x$enable_maintainer_mode" = "xyes"
@@ -2676,6 +2676,8 @@ AC_CHECK_FUNCS(\
 	rintf \
 	round \
 	roundf \
+	tgamma \
+	tgammaf \
 	trunc \
 	truncf \
 	y0 \
@@ -3390,6 +3392,7 @@ WINE_CONFIG_MAKEFILE(dlls/mscms)
 WINE_CONFIG_MAKEFILE(dlls/mscms/tests)
 WINE_CONFIG_MAKEFILE(dlls/mscoree)
 WINE_CONFIG_MAKEFILE(dlls/mscoree/tests)
+WINE_CONFIG_MAKEFILE(dlls/mscorwks)
 WINE_CONFIG_MAKEFILE(dlls/msctf)
 WINE_CONFIG_MAKEFILE(dlls/msctf/tests)
 WINE_CONFIG_MAKEFILE(dlls/msctfp)
@@ -3762,6 +3765,7 @@ WINE_CONFIG_MAKEFILE(dlls/wintrust/tests)
 WINE_CONFIG_MAKEFILE(dlls/winusb)
 WINE_CONFIG_MAKEFILE(dlls/wlanapi)
 WINE_CONFIG_MAKEFILE(dlls/wlanapi/tests)
+WINE_CONFIG_MAKEFILE(dlls/wlanui)
 WINE_CONFIG_MAKEFILE(dlls/wldap32)
 WINE_CONFIG_MAKEFILE(dlls/wldap32/tests)
 WINE_CONFIG_MAKEFILE(dlls/wmasf)

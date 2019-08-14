@@ -502,6 +502,7 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
     }
     process->parent_id       = 0;
     process->debugger        = NULL;
+    process->debug_event     = NULL;
     process->handles         = NULL;
     process->msg_fd          = NULL;
     process->sigkill_timeout = NULL;
@@ -1038,28 +1039,6 @@ void kill_debugged_processes( struct thread *debugger, int exit_code )
         process->debugger = NULL;
         terminate_process( process, NULL, exit_code );
     }
-}
-
-
-/* trigger a breakpoint event in a given process */
-void break_process( struct process *process )
-{
-    struct thread *thread;
-
-    suspend_process( process );
-
-    LIST_FOR_EACH_ENTRY( thread, &process->thread_list, struct thread, proc_entry )
-    {
-        if (thread->context)  /* inside an exception event already */
-        {
-            break_thread( thread );
-            goto done;
-        }
-    }
-    if ((thread = get_process_first_thread( process ))) thread->debug_break = 1;
-    else set_error( STATUS_ACCESS_DENIED );
-done:
-    resume_process( process );
 }
 
 

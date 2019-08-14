@@ -594,7 +594,7 @@
 @ stub __get_tlsindex
 @ cdecl __getmainargs(ptr ptr ptr long ptr)
 @ extern __initenv MSVCRT___initenv
-@ cdecl __iob_func() __p__iob
+@ cdecl __iob_func()
 @ cdecl __isascii(long) MSVCRT___isascii
 @ cdecl __iscsym(long) MSVCRT___iscsym
 @ cdecl __iscsymf(long) MSVCRT___iscsymf
@@ -636,7 +636,7 @@
 @ cdecl __p__dstbias() MSVCRT___p__dstbias
 @ cdecl __p__environ() MSVCRT___p__environ
 @ cdecl __p__fmode() MSVCRT___p__fmode
-@ cdecl __p__iob()
+@ cdecl __p__iob() __iob_func
 @ stub __p__mbcasemap()
 @ cdecl __p__mbctype()
 @ cdecl __p__pctype() MSVCRT___p__pctype
@@ -1286,7 +1286,7 @@
 @ cdecl _seterrormode(long)
 @ cdecl -arch=i386,x86_64,arm,arm64 -norelay _setjmp(ptr) MSVCRT__setjmp
 @ cdecl -arch=i386 -norelay _setjmp3(ptr long) MSVCRT__setjmp3
-@ cdecl -arch=x86_64,arm -norelay _setjmpex(ptr ptr) MSVCRT__setjmpex
+@ cdecl -arch=x86_64,arm -norelay _setjmpex(ptr ptr) __wine_setjmpex
 @ cdecl _setmaxstdio(long) MSVCRT__setmaxstdio
 @ cdecl _setmbcp(long)
 @ cdecl _setmode(long long) MSVCRT__setmode

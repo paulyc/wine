@@ -21,6 +21,7 @@
 
 #include <assert.h>
 #include <limits.h>
+#include <math.h>
 #define COBJMACROS
 #define NONAMELESSSTRUCT
 #define NONAMELESSUNION
@@ -327,6 +328,7 @@ struct d3d_device
 
     /* Required to keep track which of two available texture blending modes in d3ddevice3 is used */
     BOOL legacyTextureBlending;
+    D3DTEXTUREBLEND texture_map_blend;
 
     D3DMATRIX legacy_projection;
     D3DMATRIX legacy_clipspace;

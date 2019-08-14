@@ -20,8 +20,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include "quartz_private.h"
 
 #include "uuids.h"
@@ -38,7 +36,6 @@
 #include "vmr9.h"
 #include "pin.h"
 
-#include "wine/unicode.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(quartz);
@@ -204,7 +201,7 @@ static DWORD VMR9_SendSampleData(struct quartz_vmr *This, VMR9PresentationInfo *
 
     TRACE("%p %p %d\n", This, data, size);
 
-    amt = &This->renderer.pInputPin->pin.mtCurrent;
+    amt = &This->renderer.sink.pin.mtCurrent;
 
     if (IsEqualIID(&amt->formattype, &FORMAT_VideoInfo))
     {
@@ -381,7 +378,7 @@ static HRESULT VMR9_maybe_init(struct quartz_vmr *This, BOOL force)
     HRESULT hr;
 
     TRACE("my mode: %u, my window: %p, my last window: %p\n", This->mode, This->baseControlWindow.baseWindow.hWnd, This->hWndClippingWindow);
-    if (This->baseControlWindow.baseWindow.hWnd || !This->renderer.pInputPin->pin.pConnectedTo)
+    if (This->baseControlWindow.baseWindow.hWnd || !This->renderer.sink.pin.pConnectedTo)
         return S_OK;
 
     if (This->mode == VMR9Mode_Windowless && !This->hWndClippingWindow)
@@ -429,7 +426,7 @@ static HRESULT VMR9_maybe_init(struct quartz_vmr *This, BOOL force)
     return hr;
 }
 
-static VOID WINAPI VMR9_OnStartStreaming(BaseRenderer* iface)
+static void vmr_start_stream(BaseRenderer *iface)
 {
     struct quartz_vmr *This = impl_from_IBaseFilter(&iface->filter.IBaseFilter_iface);
 
@@ -447,7 +444,7 @@ static VOID WINAPI VMR9_OnStartStreaming(BaseRenderer* iface)
     GetClientRect(This->baseControlWindow.baseWindow.hWnd, &This->target_rect);
 }
 
-static VOID WINAPI VMR9_OnStopStreaming(BaseRenderer* iface)
+static void vmr_stop_stream(BaseRenderer *iface)
 {
     struct quartz_vmr *This = impl_from_IBaseFilter(&iface->filter.IBaseFilter_iface);
 
@@ -486,7 +483,7 @@ static HRESULT WINAPI VMR9_BreakConnect(BaseRenderer *This)
 
     if (!pVMR9->mode)
         return S_FALSE;
-     if (This->pInputPin->pin.pConnectedTo && pVMR9->allocator && pVMR9->presenter)
+     if (This->sink.pin.pConnectedTo && pVMR9->allocator && pVMR9->presenter)
     {
         if (pVMR9->renderer.filter.state != State_Stopped)
         {
@@ -558,28 +555,17 @@ static HRESULT vmr_query_interface(BaseRenderer *iface, REFIID iid, void **out)
     return S_OK;
 }
 
-static const BaseRendererFuncTable BaseFuncTable = {
-    VMR9_CheckMediaType,
-    VMR9_DoRenderSample,
-    /**/
-    NULL,
-    NULL,
-    NULL,
-    VMR9_OnStartStreaming,
-    VMR9_OnStopStreaming,
-    NULL,
-    NULL,
-    NULL,
-    VMR9_ShouldDrawSampleNow,
-    NULL,
-    /**/
-    VMR9_CompleteConnect,
-    VMR9_BreakConnect,
-    NULL,
-    NULL,
-    NULL,
-    vmr_destroy,
-    vmr_query_interface,
+static const BaseRendererFuncTable BaseFuncTable =
+{
+    .pfnCheckMediaType = VMR9_CheckMediaType,
+    .pfnDoRenderSample = VMR9_DoRenderSample,
+    .renderer_start_stream = vmr_start_stream,
+    .renderer_stop_stream = vmr_stop_stream,
+    .pfnShouldDrawSampleNow = VMR9_ShouldDrawSampleNow,
+    .pfnCompleteConnect = VMR9_CompleteConnect,
+    .pfnBreakConnect = VMR9_BreakConnect,
+    .renderer_destroy = vmr_destroy,
+    .renderer_query_interface = vmr_query_interface,
 };
 
 static LPWSTR WINAPI VMR9_GetClassWindowStyles(BaseWindow *This, DWORD *pClassStyles, DWORD *pWindowStyles, DWORD *pWindowStylesEx)
@@ -635,9 +621,9 @@ static HRESULT WINAPI VMR9_GetSourceRect(BaseControlVideo* This, RECT *pSourceRe
 static HRESULT WINAPI VMR9_GetStaticImage(BaseControlVideo* This, LONG *pBufferSize, LONG *pDIBImage)
 {
     struct quartz_vmr* pVMR9 = impl_from_BaseControlVideo(This);
+    AM_MEDIA_TYPE *amt = &pVMR9->renderer.sink.pin.mtCurrent;
     BITMAPINFOHEADER *bmiHeader;
     LONG needed_size;
-    AM_MEDIA_TYPE *amt = &pVMR9->renderer.pInputPin->pin.mtCurrent;
     char *ptr;
 
     FIXME("(%p/%p)->(%p, %p): partial stub\n", pVMR9, This, pBufferSize, pDIBImage);
@@ -705,7 +691,7 @@ static VIDEOINFOHEADER* WINAPI VMR9_GetVideoFormat(BaseControlVideo* This)
 
     TRACE("(%p/%p)\n", pVMR9, This);
 
-    pmt = &pVMR9->renderer.pInputPin->pin.mtCurrent;
+    pmt = &pVMR9->renderer.sink.pin.mtCurrent;
     if (IsEqualIID(&pmt->formattype, &FORMAT_VideoInfo)) {
         return (VIDEOINFOHEADER*)pmt->pbFormat;
     } else if (IsEqualIID(&pmt->formattype, &FORMAT_VideoInfo2)) {
@@ -1354,11 +1340,11 @@ static HRESULT WINAPI VMR9FilterConfig_SetImageCompositor(IVMRFilterConfig9 *ifa
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI VMR9FilterConfig_SetNumberOfStreams(IVMRFilterConfig9 *iface, DWORD max)
+static HRESULT WINAPI VMR9FilterConfig_SetNumberOfStreams(IVMRFilterConfig9 *iface, DWORD count)
 {
-    struct quartz_vmr *This = impl_from_IVMRFilterConfig9(iface);
-
-    FIXME("(%p/%p)->(%u) stub\n", iface, This, max);
+    FIXME("iface %p, count %u, stub!\n", iface, count);
+    if (count == 1)
+        return S_OK;
     return E_NOTIMPL;
 }
 
@@ -2181,14 +2167,14 @@ static HRESULT vmr_create(IUnknown *outer, void **out, const CLSID *clsid)
     if (FAILED(hr))
         goto fail;
 
-    hr = BaseControlWindow_Init(&pVMR->baseControlWindow, &IVideoWindow_VTable, &pVMR->renderer.filter,
-                                &pVMR->renderer.filter.csFilter, &pVMR->renderer.pInputPin->pin,
-                                &renderer_BaseWindowFuncTable);
+    hr = BaseControlWindow_Init(&pVMR->baseControlWindow, &IVideoWindow_VTable,
+            &pVMR->renderer.filter, &pVMR->renderer.filter.csFilter,
+            &pVMR->renderer.sink.pin, &renderer_BaseWindowFuncTable);
     if (FAILED(hr))
         goto fail;
 
     hr = strmbase_video_init(&pVMR->baseControlVideo, &pVMR->renderer.filter,
-            &pVMR->renderer.filter.csFilter, &pVMR->renderer.pInputPin->pin,
+            &pVMR->renderer.filter.csFilter, &pVMR->renderer.sink.pin,
             &renderer_BaseControlVideoFuncTable);
     if (FAILED(hr))
         goto fail;

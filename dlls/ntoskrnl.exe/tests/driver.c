@@ -21,6 +21,7 @@
  */
 
 #include <stdarg.h>
+#include <stdio.h>
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -63,13 +64,11 @@ void WINAPI ObfReferenceObject( void *obj );
 
 NTSTATUS WINAPI ZwQueryInformationProcess(HANDLE,PROCESSINFOCLASS,void*,ULONG,ULONG*);
 
-extern int CDECL _vsnprintf(char *str, size_t len, const char *format, __ms_va_list argptr);
-
 static void kvprintf(const char *format, __ms_va_list ap)
 {
     static char buffer[512];
     IO_STATUS_BLOCK io;
-    int len = _vsnprintf(buffer, sizeof(buffer), format, ap);
+    int len = vsnprintf(buffer, sizeof(buffer), format, ap);
     ZwWriteFile(okfile, NULL, NULL, NULL, &io, buffer, len, NULL, NULL);
 }
 
@@ -192,28 +191,6 @@ static int broken(int condition)
 #define todo_wine_if(is_todo)   todo_if((is_todo) && running_under_wine)
 #define win_skip(...)           win_skip_(__FILE__, __LINE__, __VA_ARGS__)
 
-static unsigned int strlenW( const WCHAR *str )
-{
-    const WCHAR *s = str;
-    while (*s) s++;
-    return s - str;
-}
-
-static void *kmemcpy(void *dest, const void *src, SIZE_T n)
-{
-    const char *s = src;
-    char *d = dest;
-    while (n--) *d++ = *s++;
-    return dest;
-}
-
-static void *kmemset(void *dest, int c, SIZE_T n)
-{
-    unsigned char *d = dest;
-    while (n--) *d++ = (unsigned char)c;
-    return dest;
-}
-
 static void *get_proc_address(const char *name)
 {
     UNICODE_STRING name_u;
@@ -232,6 +209,7 @@ static void *get_proc_address(const char *name)
 }
 
 static FILE_OBJECT *last_created_file;
+static unsigned int create_count, close_count;
 
 static void test_irp_struct(IRP *irp, DEVICE_OBJECT *device)
 {
@@ -973,6 +951,7 @@ static void test_stack_callout(void)
 static void test_lookaside_list(void)
 {
     NPAGED_LOOKASIDE_LIST list;
+    PAGED_LOOKASIDE_LIST paged_list;
     ULONG tag = 0x454e4957; /* WINE */
 
     ExInitializeNPagedLookasideList(&list, NULL, NULL, POOL_NX_ALLOCATION, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 0);
@@ -997,6 +976,29 @@ static void test_lookaside_list(void)
     ok(list.L.MaximumDepth == 256, "Expected 256 got %u\n", list.L.MaximumDepth);
     ok(list.L.Type == NonPagedPool, "Expected NonPagedPool got %u\n", list.L.Type);
     ExDeleteNPagedLookasideList(&list);
+
+    ExInitializePagedLookasideList(&paged_list, NULL, NULL, POOL_NX_ALLOCATION, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 0);
+    ok(paged_list.L.Depth == 4, "Expected 4 got %u\n", paged_list.L.Depth);
+    ok(paged_list.L.MaximumDepth == 256, "Expected 256 got %u\n", paged_list.L.MaximumDepth);
+    ok(paged_list.L.TotalAllocates == 0, "Expected 0 got %u\n", paged_list.L.TotalAllocates);
+    ok(paged_list.L.AllocateMisses == 0, "Expected 0 got %u\n", paged_list.L.AllocateMisses);
+    ok(paged_list.L.TotalFrees == 0, "Expected 0 got %u\n", paged_list.L.TotalFrees);
+    ok(paged_list.L.FreeMisses == 0, "Expected 0 got %u\n", paged_list.L.FreeMisses);
+    ok(paged_list.L.Type == (PagedPool|POOL_NX_ALLOCATION),
+       "Expected PagedPool|POOL_NX_ALLOCATION got %u\n", paged_list.L.Type);
+    ok(paged_list.L.Tag == tag, "Expected %x got %x\n", tag, paged_list.L.Tag);
+    ok(paged_list.L.Size == LOOKASIDE_MINIMUM_BLOCK_SIZE,
+       "Expected %u got %u\n", LOOKASIDE_MINIMUM_BLOCK_SIZE, paged_list.L.Size);
+    ok(paged_list.L.LastTotalAllocates == 0,"Expected 0 got %u\n", paged_list.L.LastTotalAllocates);
+    ok(paged_list.L.LastAllocateMisses == 0,"Expected 0 got %u\n", paged_list.L.LastAllocateMisses);
+    ExDeletePagedLookasideList(&paged_list);
+
+    paged_list.L.Depth = 0;
+    ExInitializePagedLookasideList(&paged_list, NULL, NULL, 0, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 20);
+    ok(paged_list.L.Depth == 4, "Expected 4 got %u\n", paged_list.L.Depth);
+    ok(paged_list.L.MaximumDepth == 256, "Expected 256 got %u\n", paged_list.L.MaximumDepth);
+    ok(paged_list.L.Type == PagedPool, "Expected PagedPool got %u\n", paged_list.L.Type);
+    ExDeletePagedLookasideList(&paged_list);
 }
 
 static void test_version(void)
@@ -1041,10 +1043,10 @@ static void test_ob_reference(const WCHAR *test_path)
     status = ZwCreateEvent(&event_handle, SYNCHRONIZE, &attr, NotificationEvent, TRUE);
     ok(!status, "ZwCreateEvent failed: %#x\n", status);
 
-    len = strlenW(test_path);
+    len = wcslen(test_path);
     tmp_path = ExAllocatePool(PagedPool, len * sizeof(WCHAR) + sizeof(tmpW));
-    kmemcpy(tmp_path, test_path, len * sizeof(WCHAR));
-    kmemcpy(tmp_path + len, tmpW, sizeof(tmpW));
+    memcpy(tmp_path, test_path, len * sizeof(WCHAR));
+    memcpy(tmp_path + len, tmpW, sizeof(tmpW));
 
     RtlInitUnicodeString(&pathU, tmp_path);
     attr.ObjectName = &pathU;
@@ -1226,7 +1228,7 @@ static void test_resource(void)
     BOOLEAN ret;
     HANDLE thread, thread2;
 
-    kmemset(&resource, 0xcc, sizeof(resource));
+    memset(&resource, 0xcc, sizeof(resource));
 
     status = ExInitializeResourceLite(&resource);
     ok(status == STATUS_SUCCESS, "got status %#x\n", status);
@@ -1459,6 +1461,16 @@ static void test_lookup_thread(void)
        "PsLookupThreadByThreadId returned %#x\n", status);
 }
 
+static void test_stack_limits(void)
+{
+    ULONG_PTR low = 0, high = 0;
+
+    IoGetStackLimits(&low, &high);
+    ok(low, "low = 0\n");
+    ok(low < high, "low >= high\n");
+    ok(low < (ULONG_PTR)&low && (ULONG_PTR)&low < high, "stack variable is not in stack limits\n");
+}
+
 static void test_IoAttachDeviceToDeviceStack(void)
 {
     DEVICE_OBJECT *dev1, *dev2, *dev3, *ret;
@@ -1526,6 +1538,7 @@ static void WINAPI main_test_task(DEVICE_OBJECT *device, void *context)
     test_critical_region(FALSE);
     test_call_driver(device);
     test_cancel_irp(device);
+    test_stack_limits();
 
     /* print process report */
     if (winetest_debug)
@@ -1613,13 +1626,13 @@ static NTSTATUS test_basic_ioctl(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *
     if (length < sizeof(teststr))
         return STATUS_BUFFER_TOO_SMALL;
 
-    kmemcpy(buffer, teststr, sizeof(teststr));
+    memcpy(buffer, teststr, sizeof(teststr));
     *info = sizeof(teststr);
 
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS get_cancel_count(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
+static NTSTATUS get_dword(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info, DWORD value)
 {
     ULONG length = stack->Parameters.DeviceIoControl.OutputBufferLength;
     char *buffer = irp->AssociatedIrp.SystemBuffer;
@@ -1630,9 +1643,44 @@ static NTSTATUS get_cancel_count(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *
     if (length < sizeof(DWORD))
         return STATUS_BUFFER_TOO_SMALL;
 
-    *(DWORD*)buffer = cancel_cnt;
+    *(DWORD*)buffer = value;
     *info = sizeof(DWORD);
     return STATUS_SUCCESS;
+}
+
+static NTSTATUS get_fscontext(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
+{
+    ULONG length = stack->Parameters.DeviceIoControl.OutputBufferLength;
+    char *buffer = irp->AssociatedIrp.SystemBuffer;
+    DWORD *context = stack->FileObject->FsContext;
+
+    if (!buffer || !context)
+        return STATUS_ACCESS_VIOLATION;
+
+    if (length < sizeof(DWORD))
+        return STATUS_BUFFER_TOO_SMALL;
+
+    *(DWORD*)buffer = *context;
+    *info = sizeof(DWORD);
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS return_status(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
+{
+    char *buffer = irp->AssociatedIrp.SystemBuffer;
+    NTSTATUS ret;
+
+    if (!buffer)
+        return STATUS_ACCESS_VIOLATION;
+
+    if (stack->Parameters.DeviceIoControl.InputBufferLength < sizeof(DWORD)
+            || stack->Parameters.DeviceIoControl.OutputBufferLength < 3)
+        return STATUS_BUFFER_TOO_SMALL;
+
+    ret = *(DWORD *)irp->AssociatedIrp.SystemBuffer;
+    memcpy(buffer, "ghi", 3);
+    *info = 3;
+    return ret;
 }
 
 static NTSTATUS test_load_driver_ioctl(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
@@ -1655,8 +1703,13 @@ static NTSTATUS test_load_driver_ioctl(IRP *irp, IO_STACK_LOCATION *stack, ULONG
 static NTSTATUS WINAPI driver_Create(DEVICE_OBJECT *device, IRP *irp)
 {
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
+    DWORD *context = ExAllocatePool(PagedPool, sizeof(*context));
 
     last_created_file = irpsp->FileObject;
+    ++create_count;
+    if (context)
+        *context = create_count;
+    irpsp->FileObject->FsContext = context;
     create_caller_thread = KeGetCurrentThread();
 
     irp->IoStatus.Status = STATUS_SUCCESS;
@@ -1689,7 +1742,19 @@ static NTSTATUS WINAPI driver_IoControl(DEVICE_OBJECT *device, IRP *irp)
             IoMarkIrpPending(irp);
             return STATUS_PENDING;
         case IOCTL_WINETEST_GET_CANCEL_COUNT:
-            status = get_cancel_count(irp, stack, &irp->IoStatus.Information);
+            status = get_dword(irp, stack, &irp->IoStatus.Information, cancel_cnt);
+            break;
+        case IOCTL_WINETEST_GET_CREATE_COUNT:
+            status = get_dword(irp, stack, &irp->IoStatus.Information, create_count);
+            break;
+        case IOCTL_WINETEST_GET_CLOSE_COUNT:
+            status = get_dword(irp, stack, &irp->IoStatus.Information, close_count);
+            break;
+        case IOCTL_WINETEST_GET_FSCONTEXT:
+            status = get_fscontext(irp, stack, &irp->IoStatus.Information);
+            break;
+        case IOCTL_WINETEST_RETURN_STATUS:
+            status = return_status(irp, stack, &irp->IoStatus.Information);
             break;
         case IOCTL_WINETEST_DETACH:
             IoDetachDevice(lower_device);
@@ -1721,6 +1786,10 @@ static NTSTATUS WINAPI driver_FlushBuffers(DEVICE_OBJECT *device, IRP *irp)
 
 static NTSTATUS WINAPI driver_Close(DEVICE_OBJECT *device, IRP *irp)
 {
+    IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
+    ++close_count;
+    if (stack->FileObject->FsContext)
+        ExFreePool(stack->FileObject->FsContext);
     irp->IoStatus.Status = STATUS_SUCCESS;
     IoCompleteRequest(irp, IO_NO_INCREMENT);
     return STATUS_SUCCESS;

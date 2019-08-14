@@ -317,7 +317,7 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
         WARN("Invalid context, skipping clear.\n");
         return;
     }
-    gl_info = context->gl_info;
+    gl_info = context_gl->gl_info;
 
     /* When we're clearing parts of the drawable, make sure that the target surface is well up to date in the
      * drawable. After the clear we'll mark the drawable up to date, so we have to make sure that this is true
@@ -682,7 +682,7 @@ static void wined3d_device_gl_create_dummy_textures(struct wined3d_device_gl *de
 {
     struct wined3d_dummy_textures *textures = &device_gl->dummy_textures;
     const struct wined3d_d3d_info *d3d_info = context_gl->c.d3d_info;
-    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->gl_info;
     unsigned int i;
     DWORD color;
 
@@ -812,10 +812,11 @@ static void wined3d_device_gl_create_dummy_textures(struct wined3d_device_gl *de
 }
 
 /* Context activation is done by the caller. */
-static void destroy_dummy_textures(struct wined3d_device *device, struct wined3d_context *context)
+static void wined3d_device_gl_destroy_dummy_textures(struct wined3d_device_gl *device_gl,
+        struct wined3d_context_gl *context_gl)
 {
-    struct wined3d_dummy_textures *dummy_textures = &wined3d_device_gl(device)->dummy_textures;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    struct wined3d_dummy_textures *dummy_textures = &device_gl->dummy_textures;
+    const struct wined3d_gl_info *gl_info = context_gl->gl_info;
 
     if (gl_info->supported[ARB_TEXTURE_MULTISAMPLE])
     {
@@ -909,113 +910,13 @@ static void destroy_default_samplers(struct wined3d_device *device, struct wined
     device->null_sampler = NULL;
 }
 
-static LONG fullscreen_style(LONG style)
-{
-    /* Make sure the window is managed, otherwise we won't get keyboard input. */
-    style |= WS_POPUP | WS_SYSMENU;
-    style &= ~(WS_CAPTION | WS_THICKFRAME);
-
-    return style;
-}
-
-static LONG fullscreen_exstyle(LONG exstyle)
-{
-    /* Filter out window decorations. */
-    exstyle &= ~(WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE);
-
-    return exstyle;
-}
-
-void CDECL wined3d_device_setup_fullscreen_window(struct wined3d_device *device, HWND window, UINT w, UINT h)
-{
-    BOOL filter_messages;
-    LONG style, exstyle;
-
-    TRACE("Setting up window %p for fullscreen mode.\n", window);
-
-    if (device->style || device->exStyle)
-    {
-        ERR("Changing the window style for window %p, but another style (%08x, %08x) is already stored.\n",
-                window, device->style, device->exStyle);
-    }
-
-    device->style = GetWindowLongW(window, GWL_STYLE);
-    device->exStyle = GetWindowLongW(window, GWL_EXSTYLE);
-
-    style = fullscreen_style(device->style);
-    exstyle = fullscreen_exstyle(device->exStyle);
-
-    TRACE("Old style was %08x, %08x, setting to %08x, %08x.\n",
-            device->style, device->exStyle, style, exstyle);
-
-    filter_messages = device->filter_messages;
-    device->filter_messages = TRUE;
-
-    SetWindowLongW(window, GWL_STYLE, style);
-    SetWindowLongW(window, GWL_EXSTYLE, exstyle);
-    SetWindowPos(window, HWND_TOPMOST, 0, 0, w, h, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
-
-    device->filter_messages = filter_messages;
-}
-
-void CDECL wined3d_device_restore_fullscreen_window(struct wined3d_device *device, HWND window,
-        const RECT *window_rect)
-{
-    unsigned int window_pos_flags = SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOACTIVATE;
-    BOOL filter_messages;
-    LONG style, exstyle;
-    RECT rect = {0};
-
-    if (!device->style && !device->exStyle)
-        return;
-
-    style = GetWindowLongW(window, GWL_STYLE);
-    exstyle = GetWindowLongW(window, GWL_EXSTYLE);
-
-    /* These flags are set by wined3d_device_setup_fullscreen_window, not the
-     * application, and we want to ignore them in the test below, since it's
-     * not the application's fault that they changed. Additionally, we want to
-     * preserve the current status of these flags (i.e. don't restore them) to
-     * more closely emulate the behavior of Direct3D, which leaves these flags
-     * alone when returning to windowed mode. */
-    device->style ^= (device->style ^ style) & WS_VISIBLE;
-    device->exStyle ^= (device->exStyle ^ exstyle) & WS_EX_TOPMOST;
-
-    TRACE("Restoring window style of window %p to %08x, %08x.\n",
-            window, device->style, device->exStyle);
-
-    filter_messages = device->filter_messages;
-    device->filter_messages = TRUE;
-
-    /* Only restore the style if the application didn't modify it during the
-     * fullscreen phase. Some applications change it before calling Reset()
-     * when switching between windowed and fullscreen modes (HL2), some
-     * depend on the original style (Eve Online). */
-    if (style == fullscreen_style(device->style) && exstyle == fullscreen_exstyle(device->exStyle))
-    {
-        SetWindowLongW(window, GWL_STYLE, device->style);
-        SetWindowLongW(window, GWL_EXSTYLE, device->exStyle);
-    }
-
-    if (window_rect)
-        rect = *window_rect;
-    else
-        window_pos_flags |= (SWP_NOMOVE | SWP_NOSIZE);
-    SetWindowPos(window, 0, rect.left, rect.top,
-            rect.right - rect.left, rect.bottom - rect.top, window_pos_flags);
-
-    device->filter_messages = filter_messages;
-
-    /* Delete the old values. */
-    device->style = 0;
-    device->exStyle = 0;
-}
-
 HRESULT CDECL wined3d_device_acquire_focus_window(struct wined3d_device *device, HWND window)
 {
+    unsigned int screensaver_active;
+
     TRACE("device %p, window %p.\n", device, window);
 
-    if (!wined3d_register_window(window, device))
+    if (!wined3d_register_window(NULL, window, device, 0))
     {
         ERR("Failed to register window %p.\n", window);
         return E_FAIL;
@@ -1023,6 +924,9 @@ HRESULT CDECL wined3d_device_acquire_focus_window(struct wined3d_device *device,
 
     InterlockedExchangePointer((void **)&device->focus_window, window);
     SetWindowPos(window, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+    SystemParametersInfoW(SPI_GETSCREENSAVEACTIVE, 0, &screensaver_active, 0);
+    if ((device->restore_screensaver = !!screensaver_active))
+        SystemParametersInfoW(SPI_SETSCREENSAVEACTIVE, FALSE, NULL, 0);
 
     return WINED3D_OK;
 }
@@ -1033,11 +937,16 @@ void CDECL wined3d_device_release_focus_window(struct wined3d_device *device)
 
     if (device->focus_window) wined3d_unregister_window(device->focus_window);
     InterlockedExchangePointer((void **)&device->focus_window, NULL);
+    if (device->restore_screensaver)
+    {
+        SystemParametersInfoW(SPI_SETSCREENSAVEACTIVE, TRUE, NULL, 0);
+        device->restore_screensaver = FALSE;
+    }
 }
 
 static void device_init_swapchain_state(struct wined3d_device *device, struct wined3d_swapchain *swapchain)
 {
-    BOOL ds_enable = swapchain->desc.enable_auto_depth_stencil;
+    BOOL ds_enable = swapchain->state.desc.enable_auto_depth_stencil;
     unsigned int i;
 
     for (i = 0; i < device->adapter->d3d_info.limits.max_rt_count; ++i)
@@ -1053,9 +962,14 @@ static void device_init_swapchain_state(struct wined3d_device *device, struct wi
 void wined3d_device_delete_opengl_contexts_cs(void *object)
 {
     struct wined3d_resource *resource, *cursor;
+    struct wined3d_swapchain_gl *swapchain_gl;
     struct wined3d_device *device = object;
+    struct wined3d_context_gl *context_gl;
+    struct wined3d_device_gl *device_gl;
     struct wined3d_context *context;
     struct wined3d_shader *shader;
+
+    device_gl = wined3d_device_gl(device);
 
     LIST_FOR_EACH_ENTRY_SAFE(resource, cursor, &device->resources, struct wined3d_resource, resource_list_entry)
     {
@@ -1069,16 +983,17 @@ void wined3d_device_delete_opengl_contexts_cs(void *object)
     }
 
     context = context_acquire(device, NULL, 0);
+    context_gl = wined3d_context_gl(context);
     device->blitter->ops->blitter_destroy(device->blitter, context);
     device->shader_backend->shader_free_private(device, context);
-    destroy_dummy_textures(device, context);
+    wined3d_device_gl_destroy_dummy_textures(device_gl, context_gl);
     destroy_default_samplers(device, context);
     context_release(context);
 
     while (device->context_count)
     {
-        if (device->contexts[0]->swapchain)
-            swapchain_destroy_contexts(device->contexts[0]->swapchain);
+        if ((swapchain_gl = wined3d_swapchain_gl(device->contexts[0]->swapchain)))
+            wined3d_swapchain_gl_destroy_contexts(swapchain_gl);
         else
             wined3d_context_gl_destroy(wined3d_context_gl(device->contexts[0]));
     }
@@ -1093,10 +1008,19 @@ void wined3d_device_create_primary_opengl_context_cs(void *object)
     struct wined3d_texture *target;
     HRESULT hr;
 
+    swapchain = device->swapchains[0];
+    target = swapchain->back_buffers ? swapchain->back_buffers[0] : swapchain->front_buffer;
+    if (!(context = context_acquire(device, target, 0)))
+    {
+        WARN("Failed to acquire context.\n");
+        return;
+    }
+
     if (FAILED(hr = device->shader_backend->shader_alloc_private(device,
             device->adapter->vertex_pipe, device->adapter->fragment_pipe)))
     {
         ERR("Failed to allocate shader private data, hr %#x.\n", hr);
+        context_release(context);
         return;
     }
 
@@ -1104,6 +1028,7 @@ void wined3d_device_create_primary_opengl_context_cs(void *object)
     {
         ERR("Failed to create CPU blitter.\n");
         device->shader_backend->shader_free_private(device, NULL);
+        context_release(context);
         return;
     }
     wined3d_ffp_blitter_create(&device->blitter, &device->adapter->gl_info);
@@ -1112,9 +1037,6 @@ void wined3d_device_create_primary_opengl_context_cs(void *object)
     wined3d_fbo_blitter_create(&device->blitter, &device->adapter->gl_info);
     wined3d_raw_blitter_create(&device->blitter, &device->adapter->gl_info);
 
-    swapchain = device->swapchains[0];
-    target = swapchain->back_buffers ? swapchain->back_buffers[0] : swapchain->front_buffer;
-    context = context_acquire(device, target, 0);
     context_gl = wined3d_context_gl(context);
     wined3d_device_gl_create_dummy_textures(wined3d_device_gl(device), context_gl);
     create_default_samplers(device, context);
@@ -1133,7 +1055,7 @@ HRESULT wined3d_device_set_implicit_swapchain(struct wined3d_device *device, str
     if (device->d3d_initialized)
         return WINED3DERR_INVALIDCALL;
 
-    swapchain_desc = &swapchain->desc;
+    swapchain_desc = &swapchain->state.desc;
     if (swapchain_desc->backbuffer_count && swapchain_desc->backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
     {
         struct wined3d_resource *back_buffer = &swapchain->back_buffers[0]->resource;
@@ -5383,7 +5305,7 @@ void CDECL wined3d_device_evict_managed_resources(struct wined3d_device *device)
 
 static void update_swapchain_flags(struct wined3d_texture *texture)
 {
-    unsigned int flags = texture->swapchain->desc.flags;
+    unsigned int flags = texture->swapchain->state.desc.flags;
 
     if (flags & WINED3D_SWAPCHAIN_LOCKABLE_BACKBUFFER)
         texture->resource.access |= WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
@@ -5401,11 +5323,13 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         wined3d_device_reset_cb callback, BOOL reset_state)
 {
     const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
+    struct wined3d_swapchain_state *swapchain_state;
+    struct wined3d_swapchain_desc *current_desc;
     struct wined3d_resource *resource, *cursor;
     struct wined3d_rendertarget_view *view;
     struct wined3d_swapchain *swapchain;
     struct wined3d_view_desc view_desc;
-    BOOL backbuffer_resized;
+    BOOL backbuffer_resized, windowed;
     HRESULT hr = WINED3D_OK;
     unsigned int i;
 
@@ -5419,6 +5343,8 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         ERR("Failed to get the first implicit swapchain.\n");
         return WINED3DERR_INVALIDCALL;
     }
+    swapchain_state = &swapchain->state;
+    current_desc = &swapchain_state->desc;
 
     if (reset_state)
     {
@@ -5478,47 +5404,63 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         FIXME("Unimplemented swap effect %#x.\n", swapchain_desc->swap_effect);
 
     /* No special treatment of these parameters. Just store them */
-    swapchain->desc.swap_effect = swapchain_desc->swap_effect;
-    swapchain->desc.enable_auto_depth_stencil = swapchain_desc->enable_auto_depth_stencil;
-    swapchain->desc.auto_depth_stencil_format = swapchain_desc->auto_depth_stencil_format;
-    swapchain->desc.refresh_rate = swapchain_desc->refresh_rate;
-    swapchain->desc.auto_restore_display_mode = swapchain_desc->auto_restore_display_mode;
+    current_desc->swap_effect = swapchain_desc->swap_effect;
+    current_desc->enable_auto_depth_stencil = swapchain_desc->enable_auto_depth_stencil;
+    current_desc->auto_depth_stencil_format = swapchain_desc->auto_depth_stencil_format;
+    current_desc->refresh_rate = swapchain_desc->refresh_rate;
+    current_desc->auto_restore_display_mode = swapchain_desc->auto_restore_display_mode;
 
-    if (swapchain_desc->device_window
-            && swapchain_desc->device_window != swapchain->desc.device_window)
+    if (swapchain_desc->device_window && swapchain_desc->device_window != current_desc->device_window)
     {
         TRACE("Changing the device window from %p to %p.\n",
-                swapchain->desc.device_window, swapchain_desc->device_window);
-        swapchain->desc.device_window = swapchain_desc->device_window;
-        swapchain->device_window = swapchain_desc->device_window;
+                current_desc->device_window, swapchain_desc->device_window);
+        current_desc->device_window = swapchain_desc->device_window;
+        swapchain_state->device_window = swapchain_desc->device_window;
         wined3d_swapchain_set_window(swapchain, NULL);
     }
 
-    backbuffer_resized = swapchain_desc->backbuffer_width != swapchain->desc.backbuffer_width
-            || swapchain_desc->backbuffer_height != swapchain->desc.backbuffer_height;
+    backbuffer_resized = swapchain_desc->backbuffer_width != current_desc->backbuffer_width
+            || swapchain_desc->backbuffer_height != current_desc->backbuffer_height;
+    windowed = current_desc->windowed;
 
-    if (!swapchain_desc->windowed != !swapchain->desc.windowed
-            || swapchain->reapply_mode || mode
-            || (!swapchain_desc->windowed && backbuffer_resized))
+    if (!swapchain_desc->windowed != !windowed || swapchain->reapply_mode
+            || mode || (!swapchain_desc->windowed && backbuffer_resized))
     {
-        if (FAILED(hr = wined3d_swapchain_set_fullscreen(swapchain, swapchain_desc, mode)))
+        /* Switch from windowed to fullscreen. */
+        if (windowed && !swapchain_desc->windowed)
+        {
+            HWND focus_window = device->create_parms.focus_window;
+
+            if (!focus_window)
+                focus_window = swapchain->state.device_window;
+            if (FAILED(hr = wined3d_device_acquire_focus_window(device, focus_window)))
+            {
+                ERR("Failed to acquire focus window, hr %#x.\n", hr);
+                return hr;
+            }
+        }
+        if (FAILED(hr = wined3d_swapchain_state_set_fullscreen(&swapchain->state,
+                swapchain_desc, device->wined3d, device->adapter->ordinal, mode)))
             return hr;
+
+        /* Switch from fullscreen to windowed. */
+        if (!windowed && swapchain_desc->windowed)
+            wined3d_device_release_focus_window(device);
     }
     else if (!swapchain_desc->windowed)
     {
-        DWORD style = device->style;
-        DWORD exStyle = device->exStyle;
-        /* If we're in fullscreen, and the mode wasn't changed, we have to get the window back into
-         * the right position. Some applications(Battlefield 2, Guild Wars) move it and then call
-         * Reset to clear up their mess. Guild Wars also loses the device during that.
-         */
-        device->style = 0;
-        device->exStyle = 0;
-        wined3d_device_setup_fullscreen_window(device, swapchain->device_window,
-                swapchain_desc->backbuffer_width,
-                swapchain_desc->backbuffer_height);
-        device->style = style;
-        device->exStyle = exStyle;
+        DWORD style = swapchain_state->style;
+        DWORD exstyle = swapchain_state->exstyle;
+        /* If we're in fullscreen, and the mode wasn't changed, we have to get
+         * the window back into the right position. Some applications
+         * (Battlefield 2, Guild Wars) move it and then call Reset() to clean
+         * up their mess. Guild Wars also loses the device during that. */
+        swapchain_state->style = 0;
+        swapchain_state->exstyle = 0;
+        wined3d_swapchain_state_setup_fullscreen(swapchain_state, swapchain_state->device_window,
+                swapchain_desc->backbuffer_width, swapchain_desc->backbuffer_height);
+        swapchain_state->style = style;
+        swapchain_state->exstyle = exstyle;
     }
 
     if (FAILED(hr = wined3d_swapchain_resize_buffers(swapchain, swapchain_desc->backbuffer_count,
@@ -5526,12 +5468,12 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
             swapchain_desc->multisample_type, swapchain_desc->multisample_quality)))
         return hr;
 
-    if (swapchain_desc->flags != swapchain->desc.flags)
+    if (swapchain_desc->flags != current_desc->flags)
     {
-        swapchain->desc.flags = swapchain_desc->flags;
+        current_desc->flags = swapchain_desc->flags;
 
         update_swapchain_flags(swapchain->front_buffer);
-        for (i = 0; i < swapchain->desc.backbuffer_count; ++i)
+        for (i = 0; i < current_desc->backbuffer_count; ++i)
         {
             update_swapchain_flags(swapchain->back_buffers[i]);
         }
@@ -5542,7 +5484,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         device->auto_depth_stencil_view = NULL;
         wined3d_rendertarget_view_decref(view);
     }
-    if (swapchain->desc.enable_auto_depth_stencil)
+    if (current_desc->enable_auto_depth_stencil)
     {
         struct wined3d_resource_desc texture_desc;
         struct wined3d_texture *texture;
@@ -5550,14 +5492,14 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         TRACE("Creating the depth stencil buffer.\n");
 
         texture_desc.resource_type = WINED3D_RTYPE_TEXTURE_2D;
-        texture_desc.format = swapchain->desc.auto_depth_stencil_format;
-        texture_desc.multisample_type = swapchain->desc.multisample_type;
-        texture_desc.multisample_quality = swapchain->desc.multisample_quality;
+        texture_desc.format = current_desc->auto_depth_stencil_format;
+        texture_desc.multisample_type = current_desc->multisample_type;
+        texture_desc.multisample_quality = current_desc->multisample_quality;
         texture_desc.usage = 0;
         texture_desc.bind_flags = WINED3D_BIND_DEPTH_STENCIL;
         texture_desc.access = WINED3D_RESOURCE_ACCESS_GPU;
-        texture_desc.width = swapchain->desc.backbuffer_width;
-        texture_desc.height = swapchain->desc.backbuffer_height;
+        texture_desc.width = current_desc->backbuffer_width;
+        texture_desc.height = current_desc->backbuffer_height;
         texture_desc.depth = 1;
         texture_desc.size = 0;
 
@@ -5591,7 +5533,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         device->back_buffer_view = NULL;
         wined3d_rendertarget_view_decref(view);
     }
-    if (swapchain->desc.backbuffer_count && swapchain->desc.backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
+    if (current_desc->backbuffer_count && current_desc->backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
     {
         struct wined3d_resource *back_buffer = &swapchain->back_buffers[0]->resource;
 
@@ -5854,8 +5796,8 @@ HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined
         struct wined3d_device_parent *device_parent)
 {
     struct wined3d_adapter *adapter = wined3d->adapters[adapter_idx];
+    const struct wined3d_fragment_pipe_ops *fragment_pipeline;
     const struct wined3d_vertex_pipe_ops *vertex_pipeline;
-    const struct fragment_pipeline *fragment_pipeline;
     unsigned int i;
     HRESULT hr;
 
@@ -5925,46 +5867,32 @@ err:
     return hr;
 }
 
-void device_invalidate_state(const struct wined3d_device *device, DWORD state)
+void device_invalidate_state(const struct wined3d_device *device, unsigned int state_id)
 {
-    DWORD rep = device->state_table[state].representative;
+    unsigned int representative, i, idx, shift;
     struct wined3d_context *context;
-    unsigned int i, idx, shift;
 
     wined3d_from_cs(device->cs);
 
-    if (STATE_IS_COMPUTE(state))
+    if (STATE_IS_COMPUTE(state_id))
     {
         for (i = 0; i < device->context_count; ++i)
-            context_invalidate_compute_state(device->contexts[i], state);
+            context_invalidate_compute_state(device->contexts[i], state_id);
         return;
     }
 
+    representative = device->state_table[state_id].representative;
+    idx = representative / (sizeof(*context->dirty_graphics_states) * CHAR_BIT);
+    shift = representative & ((sizeof(*context->dirty_graphics_states) * CHAR_BIT) - 1);
     for (i = 0; i < device->context_count; ++i)
     {
-        context = device->contexts[i];
-        if (isStateDirty(context, rep)) continue;
-
-        context->dirtyArray[context->numDirtyEntries++] = rep;
-        idx = rep / (sizeof(*context->isStateDirty) * CHAR_BIT);
-        shift = rep & ((sizeof(*context->isStateDirty) * CHAR_BIT) - 1);
-        context->isStateDirty[idx] |= (1u << shift);
+        device->contexts[i]->dirty_graphics_states[idx] |= (1u << shift);
     }
 }
 
 LRESULT device_process_message(struct wined3d_device *device, HWND window, BOOL unicode,
         UINT message, WPARAM wparam, LPARAM lparam, WNDPROC proc)
 {
-    if (device->filter_messages && message != WM_DISPLAYCHANGE)
-    {
-        TRACE("Filtering message: window %p, message %#x, wparam %#lx, lparam %#lx.\n",
-                window, message, wparam, lparam);
-        if (unicode)
-            return DefWindowProcW(window, message, wparam, lparam);
-        else
-            return DefWindowProcA(window, message, wparam, lparam);
-    }
-
     if (message == WM_DESTROY)
     {
         TRACE("unregister window %p.\n", window);

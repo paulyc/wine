@@ -122,11 +122,6 @@ extern const WCHAR system_dir[] DECLSPEC_HIDDEN;
 
 extern void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void*) DECLSPEC_HIDDEN;
 
-/* redefine these to make sure we don't reference kernel symbols */
-#define GetProcessHeap()       (NtCurrentTeb()->Peb->ProcessHeap)
-#define GetCurrentProcessId()  (HandleToULong(NtCurrentTeb()->ClientId.UniqueProcess))
-#define GetCurrentThreadId()   (HandleToULong(NtCurrentTeb()->ClientId.UniqueThread))
-
 /* Device IO */
 extern NTSTATUS CDROM_DeviceIoControl(HANDLE hDevice, 
                                       HANDLE hEvent, PIO_APC_ROUTINE UserApcRoutine,
@@ -168,14 +163,14 @@ extern NTSTATUS nt_to_unix_file_name_attr( const OBJECT_ATTRIBUTES *attr, ANSI_S
                                            UINT disposition ) DECLSPEC_HIDDEN;
 
 /* virtual memory */
-extern NTSTATUS virtual_alloc_aligned( PVOID *ret, ULONG zero_bits, SIZE_T *size_ptr,
+extern NTSTATUS virtual_alloc_aligned( PVOID *ret, unsigned short zero_bits_64, SIZE_T *size_ptr,
                                        ULONG type, ULONG protect, ULONG alignment ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, ULONG zero_bits, SIZE_T commit_size,
-                                     const LARGE_INTEGER *offset_ptr, SIZE_T *size_ptr, ULONG protect,
-                                     pe_image_info_t *image_info ) DECLSPEC_HIDDEN;
+extern NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, unsigned short zero_bits_64, SIZE_T commit_size,
+                                     const LARGE_INTEGER *offset_ptr, SIZE_T *size_ptr, ULONG alloc_type,
+                                     ULONG protect, pe_image_info_t *image_info ) DECLSPEC_HIDDEN;
 extern void virtual_get_system_info( SYSTEM_BASIC_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_create_builtin_view( void *base ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_alloc_thread_stack( TEB *teb, SIZE_T reserve_size,
+extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, SIZE_T reserve_size,
                                             SIZE_T commit_size, SIZE_T *pthread_size ) DECLSPEC_HIDDEN;
 extern void virtual_clear_thread_stack( void *stack_end ) DECLSPEC_HIDDEN;
 extern BOOL virtual_handle_stack_fault( void *addr ) DECLSPEC_HIDDEN;

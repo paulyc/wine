@@ -997,6 +997,7 @@ static void test_coop_level_d3d_state(void)
     IDirectDraw7 *ddraw;
     IDirect3D7 *d3d;
     D3DCOLOR color;
+    DDSCAPS2 caps;
     DWORD value;
     HWND window;
     HRESULT hr;
@@ -1010,44 +1011,63 @@ static void test_coop_level_d3d_state(void)
     }
 
     hr = IDirect3DDevice7_GetRenderTarget(device, &rt);
-    ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice7_GetRenderState(device, D3DRENDERSTATE_ZENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!!value, "Got unexpected z-enable state %#x.\n", value);
     hr = IDirect3DDevice7_GetRenderState(device, D3DRENDERSTATE_ALPHABLENDENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!value, "Got unexpected alpha blend enable state %#x.\n", value);
     hr = IDirect3DDevice7_SetRenderState(device, D3DRENDERSTATE_ALPHABLENDENABLE, TRUE);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice7_Clear(device, 0, NULL, D3DCLEAR_TARGET, 0xffff0000, 0.0f, 0);
-    ok(SUCCEEDED(hr), "Failed to clear render target, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     color = get_surface_color(rt, 320, 240);
     ok(compare_color(color, 0x00ff0000, 1), "Got unexpected color 0x%08x.\n", color);
 
     hr = IDirect3DDevice7_GetDirect3D(device, &d3d);
-    ok(SUCCEEDED(hr), "Failed to get d3d interface, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3D7_QueryInterface(d3d, &IID_IDirectDraw7, (void **)&ddraw);
-    ok(SUCCEEDED(hr), "Failed to get ddraw interface, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     IDirect3D7_Release(d3d);
     hr = IDirectDraw7_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
-    ok(SUCCEEDED(hr), "Failed to set cooperative level, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDrawSurface7_IsLost(rt);
     ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+
+    memset(&caps, 0, sizeof(caps));
+    caps.dwCaps = DDSCAPS_ZBUFFER;
+    hr = IDirectDrawSurface7_GetAttachedSurface(rt, &caps, &surface);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    caps.dwCaps = DDSCAPS_FLIP;
+    hr = IDirectDrawSurface7_GetAttachedSurface(rt, &caps, &surface);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+
     hr = IDirectDraw7_RestoreAllSurfaces(ddraw);
-    ok(SUCCEEDED(hr), "Failed to restore surfaces, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    caps.dwCaps = DDSCAPS_ZBUFFER;
+    hr = IDirectDrawSurface7_GetAttachedSurface(rt, &caps, &surface);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    IDirectDrawSurface7_Release(surface);
+
+    caps.dwCaps = DDSCAPS_FLIP;
+    hr = IDirectDrawSurface7_GetAttachedSurface(rt, &caps, &surface);
+    ok(hr == DDERR_NOTFOUND, "Got unexpected hr %#x.\n", hr);
+
     IDirectDraw7_Release(ddraw);
 
     hr = IDirect3DDevice7_GetRenderTarget(device, &surface);
-    ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(surface == rt, "Got unexpected surface %p.\n", surface);
     hr = IDirect3DDevice7_GetRenderState(device, D3DRENDERSTATE_ZENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!!value, "Got unexpected z-enable state %#x.\n", value);
     hr = IDirect3DDevice7_GetRenderState(device, D3DRENDERSTATE_ALPHABLENDENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!!value, "Got unexpected alpha blend enable state %#x.\n", value);
     hr = IDirect3DDevice7_Clear(device, 0, NULL, D3DCLEAR_TARGET, 0xff00ff00, 0.0f, 0);
-    ok(SUCCEEDED(hr), "Failed to clear render target, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     color = get_surface_color(rt, 320, 240);
     ok(compare_color(color, 0x0000ff00, 1), "Got unexpected color 0x%08x.\n", color);
 
@@ -9012,11 +9032,12 @@ static void test_vb_writeonly(void)
 
 static void test_lost_device(void)
 {
-    IDirectDrawSurface7 *surface;
+    IDirectDrawSurface7 *surface, *back_buffer;
     DDSURFACEDESC2 surface_desc;
     HWND window1, window2;
     IDirectDraw7 *ddraw;
     ULONG refcount;
+    DDSCAPS2 caps;
     HRESULT hr;
     BOOL ret;
 
@@ -9185,6 +9206,19 @@ static void test_lost_device(void)
     ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDrawSurface7_Flip(surface, NULL, DDFLIP_WAIT);
     ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+
+    memset(&caps, 0, sizeof(caps));
+    caps.dwCaps = DDSCAPS_FLIP;
+
+    hr = IDirectDrawSurface7_GetAttachedSurface(surface, &caps, &back_buffer);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface7_Restore(surface);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface7_GetAttachedSurface(surface, &caps, &back_buffer);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface7_IsLost(back_buffer);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    IDirectDrawSurface7_Release(back_buffer);
 
     IDirectDrawSurface7_Release(surface);
     refcount = IDirectDraw7_Release(ddraw);
@@ -16266,9 +16300,44 @@ static void test_begin_end_state_block(void)
 
 static void test_caps(void)
 {
+    DWORD caps_never, caps_always, caps_hal;
     DDCAPS hal_caps, hel_caps;
     IDirectDraw7 *ddraw;
     HRESULT hr;
+    BOOL no3d;
+
+    caps_never = DDSCAPS_RESERVED1
+            | DDSCAPS_ALPHA
+            | DDSCAPS_PRIMARYSURFACELEFT
+            | DDSCAPS_SYSTEMMEMORY
+            | DDSCAPS_VISIBLE
+            | DDSCAPS_WRITEONLY
+            | DDSCAPS_LIVEVIDEO
+            | DDSCAPS_HWCODEC
+            | DDSCAPS_MODEX
+            | DDSCAPS_RESERVED2
+            | 0x01000000u
+            | 0x02000000u
+            | DDSCAPS_ALLOCONLOAD
+            | DDSCAPS_VIDEOPORT
+            | DDSCAPS_STANDARDVGAMODE
+            | DDSCAPS_OPTIMIZED;
+
+    caps_always = DDSCAPS_FLIP
+            | DDSCAPS_OFFSCREENPLAIN
+            | DDSCAPS_PRIMARYSURFACE
+            | DDSCAPS_TEXTURE
+            | DDSCAPS_ZBUFFER
+            | DDSCAPS_MIPMAP;
+
+    caps_hal = DDSCAPS_BACKBUFFER
+            | DDSCAPS_COMPLEX
+            | DDSCAPS_FRONTBUFFER
+            | DDSCAPS_3DDEVICE
+            | DDSCAPS_VIDEOMEMORY
+            | DDSCAPS_OWNDC
+            | DDSCAPS_LOCALVIDMEM
+            | DDSCAPS_NONLOCALVIDMEM;
 
     ddraw = create_ddraw();
     ok(!!ddraw, "Failed to create a ddraw object.\n");
@@ -16286,7 +16355,119 @@ static void test_caps(void)
             "Got unexpected caps %#x, expected %#x.\n",
             hel_caps.ddsOldCaps.dwCaps, hel_caps.ddsCaps.dwCaps);
 
+    no3d = !(hal_caps.ddsCaps.dwCaps & DDSCAPS_3DDEVICE);
+    if (hal_caps.ddsCaps.dwCaps)
+    {
+        ok(!(hal_caps.ddsCaps.dwCaps & caps_never), "Got unexpected caps %#x.\n", hal_caps.ddsCaps.dwCaps);
+        ok(!(~hal_caps.ddsCaps.dwCaps & caps_always), "Got unexpected caps %#x.\n", hal_caps.ddsCaps.dwCaps);
+        todo_wine_if(no3d) ok(!(~hal_caps.ddsCaps.dwCaps & caps_hal),
+                "Got unexpected caps %#x.\n", hal_caps.ddsCaps.dwCaps);
+    }
+    ok(!(hel_caps.ddsCaps.dwCaps & caps_never), "Got unexpected caps %#x.\n", hel_caps.ddsCaps.dwCaps);
+    ok(!(~hel_caps.ddsCaps.dwCaps & caps_always), "Got unexpected caps %#x.\n", hel_caps.ddsCaps.dwCaps);
+    todo_wine_if(!no3d) ok(!(hel_caps.ddsCaps.dwCaps & caps_hal),
+            "Got unexpected caps %#x.\n", hel_caps.ddsCaps.dwCaps);
+
     IDirectDraw7_Release(ddraw);
+
+    if (hal_caps.ddsCaps.dwCaps)
+    {
+        hr = pDirectDrawCreateEx((GUID *)DDCREATE_HARDWAREONLY, (void **)&ddraw, &IID_IDirectDraw7, NULL);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+        memset(&hal_caps, 0, sizeof(hal_caps));
+        memset(&hel_caps, 0, sizeof(hel_caps));
+        hal_caps.dwSize = sizeof(hal_caps);
+        hel_caps.dwSize = sizeof(hel_caps);
+        hr = IDirectDraw7_GetCaps(ddraw, &hal_caps, &hel_caps);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+        ok(hal_caps.ddsOldCaps.dwCaps == hal_caps.ddsCaps.dwCaps,
+                "Got unexpected caps %#x, expected %#x.\n",
+                hal_caps.ddsOldCaps.dwCaps, hal_caps.ddsCaps.dwCaps);
+        ok(hel_caps.ddsOldCaps.dwCaps == hel_caps.ddsCaps.dwCaps,
+                "Got unexpected caps %#x, expected %#x.\n",
+                hel_caps.ddsOldCaps.dwCaps, hel_caps.ddsCaps.dwCaps);
+
+        ok(!(hal_caps.ddsCaps.dwCaps & caps_never), "Got unexpected caps %#x.\n", hal_caps.ddsCaps.dwCaps);
+        ok(!(~hal_caps.ddsCaps.dwCaps & caps_always), "Got unexpected caps %#x.\n", hal_caps.ddsCaps.dwCaps);
+        todo_wine_if(no3d) ok(!(~hal_caps.ddsCaps.dwCaps & caps_hal),
+                "Got unexpected caps %#x.\n", hal_caps.ddsCaps.dwCaps);
+        todo_wine ok(!hel_caps.ddsCaps.dwCaps, "Got unexpected caps %#x.\n", hel_caps.ddsCaps.dwCaps);
+
+        IDirectDraw7_Release(ddraw);
+    }
+
+    hr = pDirectDrawCreateEx((GUID *)DDCREATE_EMULATIONONLY, (void **)&ddraw, &IID_IDirectDraw7, NULL);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    memset(&hal_caps, 0, sizeof(hal_caps));
+    memset(&hel_caps, 0, sizeof(hel_caps));
+    hal_caps.dwSize = sizeof(hal_caps);
+    hel_caps.dwSize = sizeof(hel_caps);
+    hr = IDirectDraw7_GetCaps(ddraw, &hal_caps, &hel_caps);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    ok(hal_caps.ddsOldCaps.dwCaps == hal_caps.ddsCaps.dwCaps,
+            "Got unexpected caps %#x, expected %#x.\n",
+            hal_caps.ddsOldCaps.dwCaps, hal_caps.ddsCaps.dwCaps);
+    ok(hel_caps.ddsOldCaps.dwCaps == hel_caps.ddsCaps.dwCaps,
+            "Got unexpected caps %#x, expected %#x.\n",
+            hel_caps.ddsOldCaps.dwCaps, hel_caps.ddsCaps.dwCaps);
+
+    todo_wine ok(!hal_caps.ddsCaps.dwCaps, "Got unexpected caps %#x.\n", hal_caps.ddsCaps.dwCaps);
+    ok(!(hel_caps.ddsCaps.dwCaps & caps_never), "Got unexpected caps %#x.\n", hel_caps.ddsCaps.dwCaps);
+    ok(!(~hel_caps.ddsCaps.dwCaps & caps_always), "Got unexpected caps %#x.\n", hel_caps.ddsCaps.dwCaps);
+    todo_wine_if(!no3d) ok(!(hel_caps.ddsCaps.dwCaps & caps_hal),
+            "Got unexpected caps %#x.\n", hel_caps.ddsCaps.dwCaps);
+
+    IDirectDraw7_Release(ddraw);
+}
+
+static void test_d32_support(void)
+{
+    IDirectDrawSurface7 *surface;
+    DDSURFACEDESC2 surface_desc;
+    IDirectDraw7 *ddraw;
+    ULONG refcount;
+    HWND window;
+    HRESULT hr;
+
+    window = create_window();
+    ddraw = create_ddraw();
+    ok(!!ddraw, "Failed to create a ddraw object.\n");
+    hr = IDirectDraw7_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    surface_desc.dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT;
+    surface_desc.ddsCaps.dwCaps = DDSCAPS_ZBUFFER;
+    U4(surface_desc).ddpfPixelFormat.dwSize = sizeof(U4(surface_desc).ddpfPixelFormat);
+    U4(surface_desc).ddpfPixelFormat.dwFlags = DDPF_ZBUFFER;
+    U1(U4(surface_desc).ddpfPixelFormat).dwZBufferBitDepth = 32;
+    U3(U4(surface_desc).ddpfPixelFormat).dwZBitMask = 0xffffffff;
+    surface_desc.dwWidth = 64;
+    surface_desc.dwHeight = 64;
+    hr = IDirectDraw7_CreateSurface(ddraw, &surface_desc, &surface, NULL);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDrawSurface7_GetSurfaceDesc(surface, &surface_desc);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    ok((surface_desc.dwFlags & DDSD_PIXELFORMAT), "Got unexpected flags %#x.\n", surface_desc.dwFlags);
+    ok(U4(surface_desc).ddpfPixelFormat.dwFlags & DDPF_ZBUFFER,
+            "Got unexpected format flags %#x.\n", U4(surface_desc).ddpfPixelFormat.dwFlags);
+    ok(U1(U4(surface_desc).ddpfPixelFormat).dwZBufferBitDepth == 32,
+            "Got unexpected dwZBufferBitDepth %u.\n", U1(U4(surface_desc).ddpfPixelFormat).dwZBufferBitDepth);
+    ok(U3(U4(surface_desc).ddpfPixelFormat).dwZBitMask == 0xffffffff,
+            "Got unexpected Z mask 0x%08x.\n", U3(U4(surface_desc).ddpfPixelFormat).dwZBitMask);
+    ok(!(surface_desc.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY),
+            "Got unexpected surface caps %#x.\n", surface_desc.ddsCaps.dwCaps);
+    IDirectDrawSurface7_Release(surface);
+
+    refcount = IDirectDraw7_Release(ddraw);
+    ok(!refcount, "%u references left.\n", refcount);
+    DestroyWindow(window);
 }
 
 START_TEST(ddraw7)
@@ -16436,4 +16617,5 @@ START_TEST(ddraw7)
     test_clipper_refcount();
     test_begin_end_state_block();
     test_caps();
+    test_d32_support();
 }

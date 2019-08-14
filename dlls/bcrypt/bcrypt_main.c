@@ -68,6 +68,18 @@ NTSTATUS WINAPI BCryptRemoveContextFunctionProvider(ULONG table, LPCWSTR context
     return STATUS_NOT_IMPLEMENTED;
 }
 
+NTSTATUS WINAPI BCryptEnumContextFunctions( ULONG table, const WCHAR *ctx, ULONG iface, ULONG *buflen,
+                                            CRYPT_CONTEXT_FUNCTIONS **buffer )
+{
+    FIXME( "%u, %s, %u, %p, %p\n", table, debugstr_w(ctx), iface, buflen, buffer );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+void WINAPI BCryptFreeBuffer( void *buffer )
+{
+    FIXME( "%p\n", buffer );
+}
+
 NTSTATUS WINAPI BCryptRegisterProvider(LPCWSTR provider, ULONG flags, PCRYPT_PROVIDER_REG reg)
 {
     FIXME("%s, %08x, %p: stub\n", debugstr_w(provider), flags, reg);
@@ -181,6 +193,7 @@ NTSTATUS WINAPI BCryptOpenAlgorithmProvider( BCRYPT_ALG_HANDLE *handle, LPCWSTR 
     else if (!strcmpW( id, BCRYPT_MD5_ALGORITHM )) alg_id = ALG_ID_MD5;
     else if (!strcmpW( id, BCRYPT_RNG_ALGORITHM )) alg_id = ALG_ID_RNG;
     else if (!strcmpW( id, BCRYPT_RSA_ALGORITHM )) alg_id = ALG_ID_RSA;
+    else if (!strcmpW( id, BCRYPT_RSA_SIGN_ALGORITHM )) alg_id = ALG_ID_RSA;
     else if (!strcmpW( id, BCRYPT_SHA1_ALGORITHM )) alg_id = ALG_ID_SHA1;
     else if (!strcmpW( id, BCRYPT_SHA256_ALGORITHM )) alg_id = ALG_ID_SHA256;
     else if (!strcmpW( id, BCRYPT_SHA384_ALGORITHM )) alg_id = ALG_ID_SHA384;
@@ -505,24 +518,24 @@ static NTSTATUS set_alg_property( struct algorithm *alg, const WCHAR *prop, UCHA
     case ALG_ID_AES:
         if (!strcmpW( prop, BCRYPT_CHAINING_MODE ))
         {
-            if (!strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_ECB, size ))
+            if (!strcmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_ECB ))
             {
                 alg->mode = MODE_ID_ECB;
                 return STATUS_SUCCESS;
             }
-            else if (!strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_CBC, size ))
+            else if (!strcmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_CBC ))
             {
                 alg->mode = MODE_ID_CBC;
                 return STATUS_SUCCESS;
             }
-            else if (!strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_GCM, size ))
+            else if (!strcmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_GCM ))
             {
                 alg->mode = MODE_ID_GCM;
                 return STATUS_SUCCESS;
             }
             else
             {
-                FIXME( "unsupported mode %s\n", debugstr_wn( (WCHAR *)value, size ) );
+                FIXME( "unsupported mode %s\n", debugstr_w((WCHAR *)value) );
                 return STATUS_NOT_IMPLEMENTED;
             }
         }
